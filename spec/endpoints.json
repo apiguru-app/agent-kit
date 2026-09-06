@@ -1,0 +1,1020 @@
+{
+  "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
+  "api": {
+    "name": "Apiguru Amazon Data API",
+    "version": "1.1.18",
+    "base_url": "https://dash.apiguru.app/api/v1",
+    "agent_base_url": "https://agent.apiguru.app/agent/v1",
+    "mcp_url": "https://mcp.apiguru.app/mcp",
+    "mcp_account_url": "https://mcp.apiguru.app/account",
+    "mcp_account_note": "OAuth 2.1 (PKCE, dynamic client registration). For clients that cannot send headers and call from shared addresses: claude.ai, Claude Desktop and ChatGPT connectors. The user signs in with their Apiguru dashboard credentials or API key; calls bill that account.",
+    "docs_url": "https://github.com/apiguru-app/agent-kit#readme",
+    "contact": "support@apiguru.app",
+    "description": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 20 country marketplaces.",
+    "auth": {
+      "human": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-KEY",
+        "alt_query_param": "api_key",
+        "note": "Existing customer path. Obtain at https://dash.apiguru.app/register."
+      },
+      "agent": {
+        "type": "x402",
+        "status": "live",
+        "network": "Base mainnet (eip155:8453)",
+        "asset": "USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)",
+        "note": "Keyless. Call agent_base_url with no credentials at all. You get a small free probe budget, then HTTP 402 with a PAYMENT-REQUIRED challenge you can settle autonomously in USDC on Base. No account, no API key, no subscription, no signup.",
+        "settlement": "Verify, serve, settle: the signed payment is only settled on-chain after the upstream answers with a billable status (2xx, or the 404 that is billed). A 5xx, 400, 413 or 429 is returned with X-Payment-Status: not-settled and nothing is charged."
+      }
+    },
+    "free_tier": {
+      "probes_per_client": 3,
+      "window_hours": 24,
+      "counted_by": "IPv6 addresses are bucketed to their /64, so every address in one allocation shares a single budget. Forged proxy headers do not create new budgets.",
+      "response_headers": {
+        "X-Free-Probes-Remaining": "How many free calls are left for you.",
+        "X-Price-Next-Call": "What the next call will cost once they run out."
+      },
+      "note": "Free probes exist so an agent can verify this API fits its task before spending anything. They are deliberately small. A probe the upstream could not serve (5xx) is handed back. Every discovery surface below is free and unmetered."
+    },
+    "free_endpoints": [
+      "/health",
+      "/llms.txt",
+      "/.well-known/x402"
+    ],
+    "feedback": {
+      "github_issues": "https://github.com/apiguru-app/agent-kit/issues",
+      "wall_post": "https://dash.apiguru.app/api/v1/feedback",
+      "wall_read": "https://dash.apiguru.app/feedback",
+      "mcp_tool": "send_feedback",
+      "note": "Tell us what is wrong or missing. GitHub issues are preferred because a thread there can hold a reply; if you have no GitHub account, POST to wall_post instead -- no key, no signup, never billed: {\"message\": \"...\", \"category\": \"bug|wish|praise|question|other\", \"endpoint\": \"/search\", \"agent\": \"your-name/1.0\", \"contact\": \"optional, shown publicly\"}. The wall is readable at wall_read and via GET on wall_post."
+    },
+    "openapi_url": "https://dash.apiguru.app/openapi.json"
+  },
+  "geos": {
+    "US": "com",
+    "CA": "ca",
+    "DE": "de",
+    "MX": "com.mx",
+    "UK": "co.uk",
+    "FR": "fr",
+    "IT": "it",
+    "ES": "es",
+    "AU": "com.au",
+    "BR": "com.br",
+    "IN": "in",
+    "JP": "co.jp",
+    "NL": "nl",
+    "AE": "ae",
+    "PL": "pl",
+    "SA": "sa",
+    "SG": "sg",
+    "SE": "se",
+    "TR": "com.tr",
+    "BE": "com.be"
+  },
+  "conventions": {
+    "asin_pattern": "^[A-Z0-9]{10}$",
+    "asin_note": "Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.",
+    "seller_id_pattern": "^[A-Za-z0-9]{13,15}$",
+    "geo_default": "US",
+    "sample_asin": "B09DJLW458",
+    "error_semantics": {
+      "400": "Bad input (bad ASIN format, unknown geo, missing required param). NOT billed.",
+      "401": "Missing or invalid API key on the keyed path.",
+      "402": "Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed path it means the account balance is exhausted.",
+      "403": "Account disabled, or no active subscription plan.",
+      "404": "The ASIN genuinely does not exist on that marketplace. BILLED - the upstream fetch was performed and the bad input was the caller's. Retrying will not help; try a different geo.",
+      "413": "Too many items in a batch request.",
+      "429": "Per-second rate limit exceeded for the plan. Back off and retry.",
+      "500": "Internal error. NOT billed.",
+      "502": "Bad gateway -- our reverse proxy could not get an answer from the gateway. NOT billed. Same class as 503: retry with backoff.",
+      "503": "Upstream fetch failed on our side (block, parse fault). NOT billed. Safe and correct to retry.",
+      "504": "Gateway timeout. The upstream fetch ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+      "timeout": "No response before your own client's deadline. Nothing is billed for a request we never answered. Cold-geo sessions are the slow case and are bounded at 25s server-side; allow 60s."
+    },
+    "retry_policy": "Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are billed. Never retry 400, 401, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.",
+    "sample_seller_id": "A2A1RNLLUK3HYA"
+  },
+  "endpoints": [
+    {
+      "name": "product_details",
+      "source": "blueprints/product_details_bp.py",
+      "path": "/v2/product-details",
+      "method": "GET",
+      "summary": "Full product detail for a single ASIN",
+      "description": "Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.",
+      "bazaar_description": "Real-time Amazon product data for any ASIN: title, current price, star rating, review count, images, feature bullets, variations and category. Covers 20 country marketplaces including US, UK, DE, JP, IN and BR. Returns live data scraped at request time, not a cache.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "asin": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{10}$",
+            "description": "Single Amazon ASIN, 10 uppercase alphanumeric characters. Exactly one - comma-separated lists are rejected; use product_details_batch for many."
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "data": {
+          "asin": "B09DJLW458",
+          "product_title": "Example Product",
+          "product_price": "$29.99",
+          "product_star_rating": "4.5",
+          "product_num_ratings": 1284
+        },
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "404 means the ASIN is absent from that marketplace and IS billed. 503 means our fetch failed and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.",
+      "mcp_params": {
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return the compact record (about 4 KB: identity, price, rating, availability, bullets, category, offer, buy box). false returns the full record (about 75 KB, includes from_manufacturer, tech_specs, product_information, product_reviews)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated top-level fields to return instead of the compact set, e.g. \"tech_specs,product_information\". Any response lists what it left out under _omitted_fields."
+        }
+      }
+    },
+    {
+      "name": "product_reviews",
+      "source": "blueprints/product_reviews_v2_bp.py",
+      "path": "/v2/product-reviews",
+      "method": "GET",
+      "summary": "Customer reviews for a single ASIN",
+      "description": "Returns the review block for one ASIN: overall star rating, total rating count, Amazon's 'customers say' AI summary, and the individual review list.",
+      "bazaar_description": "Amazon customer reviews for any ASIN: overall star rating, total rating count, the 'customers say' AI summary, and individual review text with per-review ratings. Useful for sentiment analysis, product research and competitive monitoring across 20 marketplaces.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "asin": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{10}$",
+            "description": "Single Amazon ASIN, 10 uppercase alphanumeric characters."
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "data": {
+          "asin": "B09DJLW458",
+          "product_title": "Example Product",
+          "product_star_rating": "4.5",
+          "product_num_ratings": 1284,
+          "customers_say": "Customers like the build quality and value.",
+          "product_reviews": []
+        },
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "Same 404-billed / 503-not-billed semantics as product_details.",
+      "mcp_params": {
+        "max_reviews": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "Cap on individual reviews returned (0 = all). The rating summary and customers_say are always returned; _reviews_total says how many exist."
+        }
+      }
+    },
+    {
+      "name": "search",
+      "source": "blueprints/search_product_bp.py",
+      "path": "/search",
+      "method": "GET",
+      "summary": "Search Amazon products by keyword",
+      "description": "Keyword search with pagination, sorting, and filtering by category, price range, condition, brand or seller.",
+      "bazaar_description": "Search Amazon by keyword and get back structured product results: ASIN, title, price, rating and image for each hit. Supports pagination, six sort orders, and filters for category, price range, brand, seller and product condition. Works across 20 country marketplaces.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Search keywords. Required and must be non-empty."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Result page, 1-based."
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          },
+          "sort_by": {
+            "type": "string",
+            "enum": [
+              "RELEVANCE",
+              "BEST_SELLERS",
+              "LOW_HIGH_PRICE",
+              "HIGH_LOW_PRICE",
+              "REVIEWS",
+              "NEWEST"
+            ],
+            "default": "RELEVANCE",
+            "description": "Result ordering."
+          },
+          "category_id": {
+            "type": "string",
+            "description": "Restrict to an Amazon category id."
+          },
+          "min_price": {
+            "type": "string",
+            "description": "Minimum price filter, marketplace currency."
+          },
+          "max_price": {
+            "type": "string",
+            "description": "Maximum price filter, marketplace currency."
+          },
+          "product_condition": {
+            "type": "string",
+            "description": "Condition filter, e.g. NEW or USED."
+          },
+          "brand": {
+            "type": "string",
+            "description": "Brand name filter."
+          },
+          "seller_id": {
+            "type": "string",
+            "description": "Restrict results to one seller."
+          },
+          "today_deals": {
+            "type": "boolean",
+            "default": false,
+            "description": "Restrict to items in today's deals."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "metadata": {
+          "page_number": 1,
+          "page_size": 48,
+          "total": 4912,
+          "total_pages": 103
+        },
+        "products": [
+          {
+            "asin": "B0888TJNH1",
+            "product_title": "Womens Capri V Sporty Flip Flop",
+            "product_price": "24.95",
+            "product_star_rating": "4.5",
+            "product_num_ratings": 5167,
+            "badges": [],
+            "delivery": {
+              "free_delivery_date": "Thu, Sep 10"
+            }
+          }
+        ],
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "Blank values and the literal string 'null' are treated as unset. `page` must be a positive integer or the call 400s. Ten filters narrow a search besides `query`: page, sort_by, geo, brand, seller_id, category_id, min_price, max_price, product_condition and today_deals. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it for that result. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says how far `page` can go. TWO THINGS TO READ CAREFULLY: `product_num_ratings` is the count for the whole listing family, not for this ASIN - Amazon pools reviews across variants, so every colour of one shoe reports the same number. And a variant's `product_title` can be the parent's title while the ASIN is the variant's; the URL slug usually shows which variant it really is, and /v2/product-details on that ASIN is authoritative. `badges` is the source of truth for Amazon's Choice / Best Seller / Overall Pick; `is_amazon_choice` and `is_best_seller` are derived from it. `delivery` splits the delivery line: `free_delivery_date` is the date a non-member gets for free, `prime_delivery` the slot Prime would give, `fastest_delivery_date` the paid faster option; `raw` is always the whole line. Dates are the strings Amazon printed, and on non-English marketplaces only `raw` may be filled. A full page is up to 48 results and about 54 KB of JSON; over MCP the tool returns the first 10 as light rows by default and tells you how to ask for more (limit, compact, fields).",
+      "mcp_params": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "How many search results to return from this page (0 = all of them). A full page is up to 48 rows and about 54 KB, which most clients spill to a file instead of showing inline. The answer carries _truncated with the true count when it trims."
+        },
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return light rows: identity, price, rating, badges and one delivery_date, dropping the long delivery prose that repeats itself across three fields. false returns every field the REST API sends (roughly 3x the size)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated row fields to return instead of the light set, e.g. \"asin,product_title,product_price\". Rows list what they left out under _omitted_fields."
+        }
+      }
+    },
+    {
+      "name": "product_details_batch",
+      "source": "blueprints/product_details_batch_bp.py",
+      "path": "/product",
+      "method": "GET",
+      "summary": "Product detail for up to 20 ASINs in one call",
+      "description": "Batch variant of product_details. Accepts a comma-separated ASIN list, deduplicates it, and fetches all of them concurrently. Far cheaper and faster than N single calls.",
+      "bazaar_description": "Fetch Amazon product data for up to 20 ASINs in a single request: title, price, rating, review count and images for each. Deduplicates the input list and fetches concurrently, so bulk catalogue enrichment costs one round trip instead of twenty. Covers 20 country marketplaces.",
+      "price_model": "per_item",
+      "unit_price_usd": "0.008",
+      "count_param": "asins",
+      "count_separator": ",",
+      "max_items": 20,
+      "count_dedup": true,
+      "count_note": "Duplicates are collapsed before fetching, so they are quoted once.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "asins": {
+            "type": "string",
+            "description": "Comma-separated ASIN list, maximum 20 after de-duplication. Each must be 10 uppercase alphanumeric characters.",
+            "pattern": "^[A-Z0-9]{10}(,[A-Z0-9]{10})*$"
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [
+          "asins"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "results": [
+          {
+            "asin": "B09DJLW458",
+            "product_title": "Example Product"
+          }
+        ],
+        "billable_requests_count": 1,
+        "amazon_request_count": 1,
+        "response_time": "1420ms",
+        "country_code": "US",
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.",
+      "mcp_params": {
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return the compact record (about 4 KB: identity, price, rating, availability, bullets, category, offer, buy box). false returns the full record (about 75 KB, includes from_manufacturer, tech_specs, product_information, product_reviews)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated top-level fields to return instead of the compact set, e.g. \"tech_specs,product_information\". Any response lists what it left out under _omitted_fields."
+        }
+      },
+      "item_pattern": "^[A-Z0-9]{10}$"
+    },
+    {
+      "name": "offers_stock",
+      "source": "blueprints/offers_stock_bp.py",
+      "path": "/stock",
+      "aliases": [
+        "/scrape"
+      ],
+      "method": "GET",
+      "summary": "Live offers and inventory for up to 10 ASINs",
+      "description": "Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.",
+      "bazaar_description": "Live Amazon offer and inventory data for up to 10 ASINs: every active offer with seller, price, shipping and condition, which one holds the buy box, and optionally the real purchasable stock quantity. Built for repricing, buy-box monitoring and stock-out alerting across 20 marketplaces.",
+      "price_model": "per_item",
+      "unit_price_usd": "0.015",
+      "count_param": "asins",
+      "count_separator": ",",
+      "max_items": 10,
+      "count_dedup": false,
+      "count_note": "Duplicates are fetched (and quoted) as given; de-duplicate the list yourself.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "asins": {
+            "type": "string",
+            "description": "Comma-separated ASIN list, maximum 10. Each must be 10 uppercase alphanumeric characters; malformed entries are rejected with 400.",
+            "pattern": "^[A-Z0-9]{10}(,[A-Z0-9]{10})*$"
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          },
+          "check_inventory": {
+            "type": "boolean",
+            "default": false,
+            "description": "Resolve the true purchasable stock quantity. Slower and bills more upstream requests, so leave off unless you need the number."
+          },
+          "offers_count": {
+            "type": "string",
+            "default": "all",
+            "description": "'all' for every offer, 'winner' for the buy-box offer only, or a specific alphanumeric Offer ID."
+          },
+          "condition": {
+            "type": "string",
+            "description": "Comma-separated condition filter. Any of ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD, USED_ACCEPTABLE. Unrecognised values silently fall back to ALL."
+          }
+        },
+        "required": [
+          "asins"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "results": [
+          {
+            "asin": "B09DJLW458",
+            "offers": [],
+            "stock": 42
+          }
+        ],
+        "amazon_request_count": 1,
+        "response_time": 2100,
+        "country_code": "US",
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "Billed per upstream Amazon request, which is more than one per ASIN when check_inventory is true. /scrape is a legacy alias for the same handler.",
+      "item_pattern": "^[A-Z0-9]{10}$"
+    },
+    {
+      "name": "best_sellers",
+      "source": "blueprints/best_sellers_bp.py",
+      "path": "/v2/best-sellers",
+      "method": "GET",
+      "summary": "Best-seller rankings for a category",
+      "description": "Returns the current Amazon best-seller list for a category, with optional subcategory drill-down and pagination.",
+      "bazaar_description": "Current Amazon best-seller rankings for any category or subcategory, with rank, ASIN, title, price and rating for each entry. Paginated and available across 20 country marketplaces. Useful for trend detection, category research and product sourcing.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "default": "appliances",
+            "description": "Category slug, lowercased by the server. Defaults to 'appliances'."
+          },
+          "subcategory_code": {
+            "type": "string",
+            "description": "Optional subcategory node id to drill into."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Result page, 1-based."
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "data": {
+          "best_sellers": []
+        },
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "No required parameters - calling it bare returns US appliances page 1.",
+      "mcp_params": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "How many ranked products to return from this page (0 = all of them). A full page is up to 48 rows and about 54 KB, which most clients spill to a file instead of showing inline. The answer carries _truncated with the true count when it trims."
+        },
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return light rows: identity, price, rating, badges and one delivery_date, dropping the long delivery prose that repeats itself across three fields. false returns every field the REST API sends (roughly 3x the size)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated row fields to return instead of the light set, e.g. \"asin,product_title,product_price\". Rows list what they left out under _omitted_fields."
+        }
+      }
+    },
+    {
+      "name": "deals",
+      "source": "blueprints/deals_bp.py",
+      "path": "/v2/deals",
+      "method": "GET",
+      "summary": "Current Amazon deals with filters",
+      "description": "Returns active Amazon deals, filterable by category, brand, minimum star rating, price band, discount band, and Prime early access.",
+      "bazaar_description": "Live Amazon deals feed with current discounts: ASIN, title, deal price, original price and discount percentage. Filter by category, brand, minimum star rating, price band, discount band or Prime early access. Paginated by offset across 20 marketplaces. Built for deal aggregation and price-drop alerting.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Pagination offset, non-negative."
+          },
+          "categories": {
+            "type": "string",
+            "description": "Category filter."
+          },
+          "min_product_star_rating": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "ALL"
+            ],
+            "description": "Minimum star rating. Only 1, 2, 3, 4 or ALL are accepted - 5 is rejected with 400."
+          },
+          "price_range": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "ALL"
+            ],
+            "description": "Price band bucket 1-5, or ALL."
+          },
+          "discount_range": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "ALL"
+            ],
+            "description": "Discount band bucket 1-4, or ALL."
+          },
+          "brands": {
+            "type": "string",
+            "description": "Brand filter."
+          },
+          "prime_early_access": {
+            "type": "boolean",
+            "default": false,
+            "description": "Restrict to Prime early access deals."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "deals": {
+          "data": []
+        },
+        "amazon_request_count": 1,
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "The bucket parameters are ordinal buckets, not literal prices or percentages. min_product_star_rating rejects 5.",
+      "mcp_params": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "How many deals to return from this page (0 = all of them). A full page is up to 48 rows and about 54 KB, which most clients spill to a file instead of showing inline. The answer carries _truncated with the true count when it trims."
+        },
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return light rows: identity, price, rating, badges and one delivery_date, dropping the long delivery prose that repeats itself across three fields. false returns every field the REST API sends (roughly 3x the size)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated row fields to return instead of the light set, e.g. \"asin,product_title,product_price\". Rows list what they left out under _omitted_fields."
+        }
+      }
+    },
+    {
+      "name": "seller_profile_batch",
+      "source": "blueprints/seller_profile_batch_bp.py",
+      "path": "/seller-profile",
+      "method": "GET",
+      "summary": "Seller profiles for up to 10 seller IDs",
+      "description": "Returns the storefront profile for each seller id: business name, rating, feedback counts, address and marketplace presence.",
+      "bazaar_description": "Amazon seller profile data for up to 10 seller IDs in one call: business name, legal address, star rating, feedback counts over 30/90/365 days, and marketplace presence. Built for supplier vetting, competitor research and marketplace due diligence across 20 countries.",
+      "price_model": "per_item",
+      "unit_price_usd": "0.012",
+      "count_param": "seller_ids",
+      "count_separator": ",",
+      "max_items": 10,
+      "count_dedup": false,
+      "count_note": "Duplicates are fetched (and quoted) as given; de-duplicate the list yourself.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "seller_ids": {
+            "type": "string",
+            "description": "Comma-separated seller IDs, maximum 10. Each must be 13-15 alphanumeric characters or the whole call 400s.",
+            "pattern": "^[A-Za-z0-9]{13,15}(,[A-Za-z0-9]{13,15})*$"
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [
+          "seller_ids"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "results": [
+          {
+            "seller_id": "A1B2C3D4E5F6G",
+            "business_name": "Example Seller"
+          }
+        ],
+        "billable_requests_count": 1,
+        "amazon_request_count": 1,
+        "response_time": 1800,
+        "country_code": "US",
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400.",
+      "item_pattern": "^[A-Za-z0-9]{13,15}$"
+    },
+    {
+      "name": "seller_products",
+      "source": "blueprints/seller_products_bp.py",
+      "path": "/v2/seller-products",
+      "method": "GET",
+      "summary": "Products listed by a seller",
+      "description": "Returns the paginated catalogue of products offered by a given seller storefront.",
+      "bazaar_description": "List every product in an Amazon seller's storefront: ASIN, title, price, rating and image, paginated. Built for competitor catalogue monitoring, supplier assortment analysis and brand-protection sweeps across 20 marketplaces.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "description": "Amazon seller ID. Required."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Result page, 1-based."
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [
+          "seller_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "data": {
+          "products": []
+        },
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "Unlike seller_profile_batch, seller_id format is not pattern-validated here.",
+      "mcp_params": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "How many the seller's products to return from this page (0 = all of them). A full page is up to 48 rows and about 54 KB, which most clients spill to a file instead of showing inline. The answer carries _truncated with the true count when it trims."
+        },
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return light rows: identity, price, rating, badges and one delivery_date, dropping the long delivery prose that repeats itself across three fields. false returns every field the REST API sends (roughly 3x the size)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated row fields to return instead of the light set, e.g. \"asin,product_title,product_price\". Rows list what they left out under _omitted_fields."
+        }
+      }
+    },
+    {
+      "name": "seller_reviews",
+      "source": "blueprints/seller_reviews_bp.py",
+      "path": "/v2/seller-reviews",
+      "method": "GET",
+      "summary": "Feedback reviews for a seller",
+      "description": "Returns paginated seller feedback, optionally filtered to a star-rating window.",
+      "bazaar_description": "Amazon seller feedback reviews with rating, date and review text, paginated and filterable to a star-rating window. Built for supplier vetting, reputation monitoring and detecting seller quality drift across 20 marketplaces.",
+      "price_model": "flat",
+      "price_usd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "description": "Amazon seller ID. Required."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Result page, 1-based."
+          },
+          "from_rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Lower bound of the star-rating filter."
+          },
+          "to_rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Upper bound of the star-rating filter."
+          },
+          "geo": {
+            "type": "string",
+            "enum": [
+              "US",
+              "CA",
+              "DE",
+              "MX",
+              "UK",
+              "FR",
+              "IT",
+              "ES",
+              "AU",
+              "BR",
+              "IN",
+              "JP",
+              "NL",
+              "AE",
+              "PL",
+              "SA",
+              "SG",
+              "SE",
+              "TR",
+              "BE"
+            ],
+            "default": "US",
+            "description": "Marketplace country code."
+          }
+        },
+        "required": [
+          "seller_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_example": {
+        "success": true,
+        "data": {
+          "reviews": []
+        },
+        "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+      },
+      "notes": "from_rating and to_rating are optional; omit both for unfiltered feedback.",
+      "mcp_params": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "How many seller reviews to return from this page (0 = all of them). A full page is up to 48 rows and about 54 KB, which most clients spill to a file instead of showing inline. The answer carries _truncated with the true count when it trims."
+        },
+        "compact": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return light rows: identity, price, rating, badges and one delivery_date, dropping the long delivery prose that repeats itself across three fields. false returns every field the REST API sends (roughly 3x the size)."
+        },
+        "fields": {
+          "type": "string",
+          "description": "Comma-separated row fields to return instead of the light set, e.g. \"asin,product_title,product_price\". Rows list what they left out under _omitted_fields."
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.apiguru/amazon-data",
+  "title": "Apiguru Amazon Data",
+  "description": "Live Amazon product, review, search, deal, offer/stock and seller data across 20 marketplaces.",
+  "version": "1.1.18",
+  "repository": {
+    "url": "https://github.com/apiguru-app/agent-kit",
+    "source": "github"
+  },
+  "websiteUrl": "https://apiguru.app",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "apiguru-mcp",
+      "version": "1.1.18",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "APIGURU_API_KEY",
+          "description": "Optional. An Apiguru API key from https://dash.apiguru.app. Without it the server uses the keyless agent gateway: a small free probe budget, then an HTTP 402 payment challenge payable via x402 (USDC on Base).",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "APIGURU_BASE_URL",
+          "description": "Optional. Override the API base URL. Only needed for self-hosted or staging deployments.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "npm",
+      "identifier": "apiguru-mcp",
+      "version": "1.1.18",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "APIGURU_API_KEY",
+          "description": "Optional. An Apiguru API key from https://dash.apiguru.app. Without it the server uses the keyless agent gateway: a small free probe budget, then an HTTP 402 payment challenge payable via x402 (USDC on Base).",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "APIGURU_BASE_URL",
+          "description": "Optional. Override the API base URL. Only needed for self-hosted or staging deployments.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.apiguru.app/mcp",
+      "headers": [
+        {
+          "name": "X-API-KEY",
+          "description": "Optional. Apiguru API key. Omit it to use the keyless free-probe-then-402 path.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

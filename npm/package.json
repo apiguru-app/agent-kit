@@ -1,0 +1,51 @@
+{
+  "name": "apiguru-mcp",
+  "version": "1.1.18",
+  "description": "Live Amazon marketplace data for AI agents as MCP tools: product details, reviews, keyword search, best-sellers, deals, live offers and stock, and seller profiles across 20 countries. `npx apiguru-mcp` needs only Node 18+ - no Python, no uv, no API key.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "modelcontextprotocol",
+    "mcp-server",
+    "amazon",
+    "ecommerce",
+    "product-data",
+    "scraping",
+    "x402",
+    "agent",
+    "claude",
+    "cursor",
+    "codex"
+  ],
+  "homepage": "https://apiguru.app",
+  "bugs": {
+    "url": "https://github.com/apiguru-app/agent-kit/issues",
+    "email": "support@apiguru.app"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apiguru-app/agent-kit.git",
+    "directory": "npm"
+  },
+  "license": "MIT",
+  "author": "Apiguru <support@apiguru.app> (https://apiguru.app)",
+  "type": "module",
+  "bin": {
+    "apiguru-mcp": "bin/apiguru-mcp.mjs"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "mcpName": "app.apiguru/amazon-data"
+}

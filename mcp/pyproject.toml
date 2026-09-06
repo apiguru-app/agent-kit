@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "apiguru-mcp"
+version = "1.1.18"
+description = "MCP server for the Apiguru Amazon Data API - product details, reviews, search, offers and seller data across 20 marketplaces."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+license-files = ["LICENSE"]
+authors = [{ name = "Apiguru", email = "support@apiguru.app" }]
+keywords = ["mcp", "model-context-protocol", "amazon", "scraping", "ecommerce", "x402", "agent"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "mcp>=2.0.0",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+http = ["uvicorn>=0.30", "starlette>=0.37"]
+# Hosted deployment only: OAuth 2.1 token store for the /account endpoint.
+oauth = ["uvicorn>=0.30", "starlette>=0.37", "sqlalchemy[asyncio]>=2.0", "asyncpg>=0.29"]
+
+[project.urls]
+Homepage = "https://apiguru.app"
+Documentation = "https://dash.apiguru.app/docs"
+Source = "https://github.com/apiguru-app/agent-kit"
+
+[project.scripts]
+apiguru-mcp = "apiguru_mcp.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apiguru_mcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"apiguru_mcp/data/endpoints.json" = "apiguru_mcp/data/endpoints.json"

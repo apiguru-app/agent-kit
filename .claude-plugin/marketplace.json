@@ -1,0 +1,34 @@
+{
+  "name": "apiguru",
+  "owner": {
+    "name": "Apiguru",
+    "email": "support@apiguru.app",
+    "url": "https://apiguru.app"
+  },
+  "metadata": {
+    "description": "Agent-facing tooling for the Apiguru Amazon Data API.",
+    "version": "1.1.18"
+  },
+  "plugins": [
+    {
+      "name": "apiguru",
+      "source": "./plugin/apiguru",
+      "description": "Live Amazon marketplace data across 20 countries - product details, prices, reviews, search, best-sellers, deals, live offers and stock, and seller profiles. Callable with no API key: unkeyed agents get free probes, then pay per call via x402 (USDC on Base). The bundled MCP server is launched with `uvx apiguru-mcp` (needs uv; or `pip install apiguru-mcp` and point the server at `apiguru-mcp`).",
+      "version": "1.1.18",
+      "author": {
+        "name": "Apiguru"
+      },
+      "homepage": "https://apiguru.app",
+      "license": "MIT",
+      "keywords": [
+        "amazon",
+        "ecommerce",
+        "product-data",
+        "mcp",
+        "x402",
+        "agent-payments"
+      ],
+      "category": "data"
+    }
+  ]
+}

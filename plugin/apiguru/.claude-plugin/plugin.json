@@ -1,0 +1,30 @@
+{
+  "name": "apiguru",
+  "description": "Live Amazon marketplace data across 20 countries - product details, prices, reviews, search, best-sellers, deals, live offers and stock, and seller profiles. Bundles the Apiguru skill and MCP server. Works with no API key.",
+  "version": "1.1.18",
+  "author": {
+    "name": "Apiguru",
+    "email": "support@apiguru.app",
+    "url": "https://apiguru.app"
+  },
+  "homepage": "https://apiguru.app",
+  "repository": "https://github.com/apiguru-app/agent-kit",
+  "license": "MIT",
+  "keywords": [
+    "amazon",
+    "ecommerce",
+    "product-data",
+    "scraping",
+    "mcp",
+    "x402"
+  ],
+  "mcpServers": {
+    "apiguru": {
+      "command": "uvx",
+      "args": [
+        "apiguru-mcp"
+      ],
+      "env": {}
+    }
+  }
+}
