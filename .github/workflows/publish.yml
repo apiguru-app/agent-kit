@@ -1,0 +1,150 @@
+# Publish apiguru-mcp to PyPI, npm and the official MCP Registry on a version tag.
+#
+#   git tag v1.0.1 && git push origin v1.0.1
+#
+# PyPI: uses the repository secret PYPI_API_TOKEN when it is set; with no
+# token it falls back to Trusted Publishing (configure on pypi.org ->
+# apiguru-mcp -> Publishing: owner apiguru-app, repository agent-kit,
+# workflow publish.yml, environment pypi).
+#
+# npm: Trusted Publishing only (npmjs.com -> apiguru-mcp -> Settings ->
+# Trusted publisher: apiguru-app/agent-kit, publish.yml). No NPM_TOKEN.
+#
+# MCP Registry: authenticates the app.apiguru/* namespace by DNS. The public
+# key is in a TXT record on apiguru.app; the private seed goes in the
+# repository secret MCP_PRIVATE_KEY. Without that secret the registry step is
+# skipped, never failed.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Regenerate spec-derived files and check nothing drifted
+        run: |
+          uv run --with pyyaml python spec/generate.py
+          git diff --exit-code -- spec mcp/apiguru_mcp/data gateway/endpoints.json skill plugin
+      - name: Build sdist + wheel
+        run: uv build --out-dir dist mcp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    env:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        if: env.PYPI_API_TOKEN != '' || vars.PYPI_TRUSTED_PUBLISHING == 'true'
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        # Runs with the token when the secret exists, with Trusted Publishing
+        # when the repository variable PYPI_TRUSTED_PUBLISHING is 'true', and
+        # is skipped (not failed) otherwise.
+        if: env.PYPI_API_TOKEN != '' || vars.PYPI_TRUSTED_PUBLISHING == 'true'
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: PyPI step skipped
+        if: env.PYPI_API_TOKEN == '' && vars.PYPI_TRUSTED_PUBLISHING != 'true'
+        run: echo "No PYPI_API_TOKEN secret and PYPI_TRUSTED_PUBLISHING is not 'true'; publish locally with deploy/release.sh --publish."
+
+  mcp-registry:
+    # Waits for npm as well: once server.json lists the npm package the
+    # registry verifies it exists at publish time.
+    needs: [pypi, npm]
+    runs-on: ubuntu-latest
+    env:
+      # The secrets context cannot be read inside `if`; env can.
+      MCP_PRIVATE_KEY: ${{ secrets.MCP_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        if: env.MCP_PRIVATE_KEY != ''
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin mcp-publisher
+      - name: Publish to the MCP Registry (DNS-authenticated app.apiguru namespace)
+        if: env.MCP_PRIVATE_KEY != ''
+        working-directory: mcp
+        run: |
+          mcp-publisher login dns --domain apiguru.app --private-key "$MCP_PRIVATE_KEY"
+          mcp-publisher publish
+      - name: Registry step skipped
+        if: env.MCP_PRIVATE_KEY == ''
+        run: echo "MCP_PRIVATE_KEY not set; see deploy/DISTRIBUTION.md for the DNS setup."
+
+  npm:
+    # `npx apiguru-mcp` -- the stdio bridge in npm/. Published by Trusted
+    # Publishing: npmjs.com -> apiguru-mcp -> Settings -> Trusted publisher
+    # names this repository and this workflow file, and the job proves it is
+    # that workflow with an OIDC token (id-token: write). No npm token
+    # anywhere: granular tokens expired (1.1.23) and lost the 2FA bypass
+    # npm has deprecated (1.1.24), and a token in the environment would make
+    # npm use it instead of OIDC, so NPM_TOKEN is deliberately not read.
+    # Provenance comes with it. Needs npm >= 11.5.1; Node 22 ships 10.x.
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC for Trusted Publishing + provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish apiguru-mcp to npm (Trusted Publishing)
+        working-directory: npm
+        run: |
+          npm install -g npm@latest
+          npm --version
+          npm install --no-audit --no-fund
+          npm test
+          npm publish --access public
+
+  clawhub:
+    # The skill catalogue does not read from GitHub; every release is a
+    # publish. Needs the repository secret CLAWHUB_TOKEN (clawhub.ai -> API tokens).
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: env.CLAWHUB_TOKEN != ''
+        with:
+          node-version: "22"
+      - name: Publish the skill
+        if: env.CLAWHUB_TOKEN != ''
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('spec/endpoints.json'))['api']['version'])")
+          find skill plugin -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+          npx -y clawhub@latest login --token "$CLAWHUB_TOKEN" --no-input
+          npx -y clawhub@latest publish ./skill/apiguru-amazon-data --slug apiguru-amazon-data \
+            --name "Apiguru Amazon Data" --version "$VERSION" \
+            --changelog "Release $VERSION (see GitHub)" --tags latest \
+            --topics "amazon,ecommerce,product-data,scraping,x402" \
+            --source-repo apiguru-app/agent-kit --source-path skill/apiguru-amazon-data \
+            --source-ref main --source-commit "$GITHUB_SHA" --no-input
+      - name: ClawHub step skipped
+        if: env.CLAWHUB_TOKEN == ''
+        run: echo "CLAWHUB_TOKEN not set; publish with npx clawhub locally."
