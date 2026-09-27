@@ -170,3 +170,35 @@ jobs:
       - name: ClawHub step skipped
         if: env.CLAWHUB_TOKEN == ''
         run: echo "CLAWHUB_TOKEN not set; publish with npx clawhub locally."
+
+  verify:
+    # One version on every channel: a job that is skipped (missing secret)
+    # or a registry that quietly kept the old version shows up here as a red
+    # run, instead of weeks later as a stale listing. Runs even when an
+    # upstream job failed, so the summary always names every channel.
+    needs: [pypi, npm, clawhub, mcp-registry]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every channel serves this version
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('spec/endpoints.json'))['api']['version'])")
+          check() {  # name, command that prints the served version
+            for i in $(seq 1 10); do
+              got=$(eval "$2" 2>/dev/null || true)
+              if [ "$got" = "$VERSION" ]; then echo "| $1 | $got | ok |" >> "$GITHUB_STEP_SUMMARY"; return 0; fi
+              sleep 30
+            done
+            echo "| $1 | ${got:-none} | MISSING |" >> "$GITHUB_STEP_SUMMARY"; echo "$1 serves '${got:-none}', expected $VERSION"; return 1
+          }
+          echo "### Channels for $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "| channel | serves | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          fail=0
+          check PyPI "curl -fsS https://pypi.org/pypi/apiguru-mcp/json | jq -r .info.version" || fail=1
+          check npm "curl -fsS https://registry.npmjs.org/apiguru-mcp | jq -r '.\"dist-tags\".latest'" || fail=1
+          check ClawHub "curl -fsS https://clawhub.ai/api/v1/skills/apiguru-amazon-data | jq -r .latestVersion.version" || fail=1
+          check "MCP Registry" "curl -fsS 'https://registry.modelcontextprotocol.io/v0/servers?search=app.apiguru/amazon-data&version=latest' | jq -r '.servers[0].server.version'" || fail=1
+          check "GitHub (plugin marketplace, Gemini, npx skills)" "curl -fsS https://raw.githubusercontent.com/apiguru-app/agent-kit/main/.claude-plugin/marketplace.json | jq -r '.plugins[0].version'" || fail=1
+          exit $fail

@@ -275,6 +275,16 @@ def _discovery_routes(server) -> None:
         ]
         return PlainTextResponse("\n".join(lines))
 
+    @server.custom_route("/.well-known/glama.json", methods=["GET"])
+    async def glama_claim(_request: Request):
+        # Glama connector ownership (HTTP challenge). The claim token is bound
+        # to the deployer's Glama account, so it comes from the environment
+        # rather than this public code; unset means "not claimed here".
+        claim = os.environ.get("APIGURU_GLAMA_CLAIM", "").strip()
+        if not claim:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse({"$schema": "https://glama.ai/mcp/schemas/connector.json", "claim": claim})
+
     @server.custom_route("/spec.json", methods=["GET"])
     async def spec(_request: Request):
         return JSONResponse(load_spec())
