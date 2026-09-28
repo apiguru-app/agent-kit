@@ -51,6 +51,14 @@ METHOD_HEADER = b"mcp-method"
 # header -- and the handshake path answers -32601. 34 of those in a day, from
 # directories and from a user behind our npm bridge.
 DISCOVER = "server/discover"
+# The 2026-07-28 replacement for the standing GET stream. A chat client behind
+# our npm bridge sent it every 15 s for 16 hours (2,504 times, 2026-09-28): the
+# bridge never learns the negotiated version, so no request carries the
+# header, every one landed on the handshake path, and each -32601 was retried.
+LISTEN = "subscriptions/listen"
+# Methods that exist only on the 2026-07-28 wire. The SDK routes on the
+# MCP-Protocol-Version header alone, so without it these can never be served.
+MODERN_ONLY = (DISCOVER, LISTEN)
 ALLOWED_METHODS = "GET, POST, DELETE, OPTIONS, HEAD"
 # Bodies larger than this are passed through without inspection.
 MAX_INSPECTED_BODY = 256 * 1024
@@ -77,38 +85,63 @@ def needs_legacy_routing(version: str | None, body: Any) -> bool:
         return False
     if not isinstance(body, dict) or "method" not in body:
         return False
-    if body["method"] == DISCOVER:  # handled by discover_as_modern instead
+    if body["method"] in MODERN_ONLY:  # handled by modern_only_as_modern instead
         return False
     params = body.get("params")
     meta = params.get("_meta") if isinstance(params, dict) else None
     return not (isinstance(meta, dict) and PROTOCOL_VERSION_META_KEY in meta)
 
 
-def discover_as_modern(version: str | None, body: Any) -> dict | None:
-    """A `server/discover` without the modern envelope, rebuilt with one.
+def modern_only_as_modern(version: str | None, body: Any) -> tuple[dict, str] | None:
+    """A 2026-07-28-only request (see MODERN_ONLY) made servable.
 
-    Returns the body to serve instead, or None to leave the request alone.
-    Only a version-less or handshake-version request is rebuilt; a client that
-    names a version we do not know still gets the SDK's -32022 listing what we
-    support, which is how it is meant to find out.
+    Returns (body, version for the MCP-Protocol-Version header), or None to
+    leave the request alone. Two shapes reach the handshake path and get
+    -32601 there:
+
+    * no envelope in the body (a bare `server/discover`): the envelope is
+      added;
+    * a complete envelope but no header (heldfast, 9 times in 30 h): the body
+      is kept and the header is set from the version it names.
+
+    A client whose header names a version we do not know still gets the
+    SDK's -32022 listing what we support, which is how it is meant to find
+    out. A `subscriptions/listen` without `notifications` asks for nothing
+    and is served as that -- an acknowledged, quiet stream -- rather than a
+    -32602 its client would retry.
     """
     if LATEST_MODERN_VERSION is None or not isinstance(body, dict):
         return None
-    if body.get("method") != DISCOVER:
+    method = body.get("method")
+    if method not in MODERN_ONLY:
         return None
     if version is not None and version not in HANDSHAKE_PROTOCOL_VERSIONS:
         if version != LATEST_MODERN_VERSION:
             return None
-    params = body.get("params") if isinstance(body.get("params"), dict) else {}
+    params = dict(body["params"]) if isinstance(body.get("params"), dict) else {}
     meta = params.get("_meta") if isinstance(params.get("_meta"), dict) else {}
+    changed = False
+    if method == LISTEN and not isinstance(params.get("notifications"), dict):
+        params["notifications"] = {}
+        changed = True
     if PROTOCOL_VERSION_META_KEY in meta and CLIENT_CAPABILITIES_META_KEY in meta:
-        return None
+        claimed = str(meta[PROTOCOL_VERSION_META_KEY])
+        if version == claimed and not changed:
+            return None  # a well-formed modern request; the SDK serves it
+        return {**body, "params": params}, claimed
     meta = {
         PROTOCOL_VERSION_META_KEY: LATEST_MODERN_VERSION,
         CLIENT_CAPABILITIES_META_KEY: {},
         **meta,
     }
-    return {**body, "params": {**params, "_meta": meta}}
+    params["_meta"] = meta
+    return {**body, "params": params}, str(meta[PROTOCOL_VERSION_META_KEY])
+
+
+def discover_as_modern(version: str | None, body: Any) -> dict | None:
+    """The rebuilt body alone (the 1.1.31 name, kept for callers and tests)."""
+    rescued = modern_only_as_modern(version, body)
+    return rescued[0] if rescued else None
 
 
 def _with_headers(scope, replace: dict[bytes, bytes]):
@@ -253,15 +286,17 @@ class McpTrafficMiddleware:
                 except ValueError:
                     parsed = None
 
-            rebuilt = discover_as_modern(version, parsed)
-            if rebuilt is not None:
+            rescued = modern_only_as_modern(version, parsed)
+            if rescued is not None:
+                rebuilt, claimed = rescued
                 body_bytes = json.dumps(rebuilt).encode()
                 scope = _with_headers(scope, {
-                    PROTOCOL_HEADER: LATEST_MODERN_VERSION.encode(),
-                    METHOD_HEADER: DISCOVER.encode(),
+                    PROTOCOL_HEADER: claimed.encode(),
+                    METHOD_HEADER: rebuilt["method"].encode(),
                     b"content-length": str(len(body_bytes)).encode(),
                 })
-                era = "modern-for-discover"
+                # era=modern-for-discover / era=modern-for-listen
+                era = f"modern-for-{rebuilt['method'].rsplit('/', 1)[-1]}"
             elif needs_legacy_routing(version, parsed):
                 scope = dict(scope)
                 scope["headers"] = [

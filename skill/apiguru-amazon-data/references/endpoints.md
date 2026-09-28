@@ -77,7 +77,7 @@ Search Amazon products by keyword. Filters: page, sort_by, category_id (browse n
 | `max_price` | number | no | Highest price, in the marketplace currency. |
 | `product_condition` | enum | no | NEW, USED or RENEWED (case-insensitive). Applied with the marketplace's own condition node; where a marketplace does not offer one, the answer's filters_ignored says so and available_filters lists what it does offer. |
 | `brand` | string | no | Brand name as Amazon spells it (case-insensitive), e.g. Samsung. |
-| `seller_id` | string | no | Restrict results to one seller's offers (Amazon seller id). |
+| `seller_id` | string | no | Restrict results to one seller's offers: an Amazon seller id, 'A' followed by 9-20 letters and digits (e.g. A2A1RNLLUK3HYA). |
 | `today_deals` | boolean | no | Only items in Today's Deals, using that marketplace's own refinement. Where a marketplace has none (amazon.fr on 2026-09-08) it is reported under filters_ignored. Default `False`. |
 | `deal_type` | enum | no | A specific promotion refinement: today_deals, all_discounts, coupons or buy_more_save_more. available_filters.deal_type lists the ones this marketplace has. |
 
@@ -165,7 +165,7 @@ Returns the storefront profile for each seller id: business name, rating, feedba
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
-| `seller_ids` | string | yes | Comma-separated seller IDs, maximum 10. Each must be 13-15 alphanumeric characters or the whole call 400s. |
+| `seller_ids` | string | yes | Comma-separated seller IDs, maximum 10. Each must be an Amazon seller id -- 'A' followed by 9-20 letters and digits, e.g. A2A1RNLLUK3HYA -- or the whole call 400s. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
 
 > Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (Amazon served nothing usable on any route; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.
@@ -178,7 +178,7 @@ Products listed by a seller: a storefront search. Takes the same filters as sear
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
-| `seller_id` | string | yes | Restrict results to one seller's offers (Amazon seller id). |
+| `seller_id` | string | yes | Amazon seller id whose storefront to list: 'A' followed by 9-20 letters and digits, the seller= or me= value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required. |
 | `query` | string | no | Optional keywords to search within this seller's storefront. |
 | `page` | integer | no | Result page, 1-based. metadata.total_pages says how far it goes. Default `1`. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
@@ -207,7 +207,7 @@ Returns paginated seller feedback, optionally filtered to a star-rating window.
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
-| `seller_id` | string | yes | Amazon seller ID. Required. |
+| `seller_id` | string | yes | Amazon seller id: 'A' followed by 9-20 letters and digits, the seller= or me= value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required. |
 | `page` | integer | no | Result page, 1-based, 5 reviews a page; has_next_page in the answer says whether another exists. Default `1`. |
 | `from_rating` | integer | no | Lowest star rating to include, 1-5. |
 | `to_rating` | integer | no | Highest star rating to include, 1-5. |
@@ -218,5 +218,5 @@ Returns paginated seller feedback, optionally filtered to a star-rating window.
 ## Formats
 
 - ASIN: `^[A-Z0-9]{10}$` - Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.
-- Seller ID: `^[A-Za-z0-9]{13,15}$`
+- Seller ID: `^[Aa][A-Za-z0-9]{9,20}$` - An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected with 400 before any fetch.
 - Sample ASIN for testing: `B09DJLW458`

@@ -215,7 +215,7 @@ Measured on the ASIN above: 2,223 bytes against 135,923 for the whole record, a 
 
 - **Marketplaces** (20): US, CA, DE, MX, UK, FR, IT, ES, AU, BR, IN, JP, NL, AE, PL, SA, SG, SE, TR, BE. Pass as `geo`, chosen from the user's request or the Amazon domain they mention (amazon.de -> DE). The API assumes `US` only when the parameter is omitted; do not rely on that.
 - **ASIN format**: `^[A-Z0-9]{10}$`. Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.
-- **Seller ID format**: `^[A-Za-z0-9]{13,15}$`.
+- **Seller ID format**: `^[Aa][A-Za-z0-9]{9,20}$`. An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected with 400 before any fetch.
 - **Sample ASIN for testing**: `B09DJLW458`.
 
 ## Error semantics

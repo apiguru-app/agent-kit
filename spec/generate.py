@@ -682,7 +682,7 @@ def build_llms_txt(spec):
         f"user's request or the Amazon domain they mention (amazon.de -> DE). The API assumes "
         f"`{conventions['geo_default']}` only when the parameter is omitted; do not rely on that.",
         f"- **ASIN format**: `{conventions['asin_pattern']}`. {conventions['asin_note']}",
-        f"- **Seller ID format**: `{conventions['seller_id_pattern']}`.",
+        f"- **Seller ID format**: `{conventions['seller_id_pattern']}`. {conventions.get('seller_id_note', '')}".rstrip(),
         f"- **Sample ASIN for testing**: `{conventions['sample_asin']}`.",
         "",
         "## Error semantics",
@@ -792,7 +792,7 @@ def build_endpoints_md(spec):
         "## Formats",
         "",
         f"- ASIN: `{conv['asin_pattern']}` - {conv['asin_note']}",
-        f"- Seller ID: `{conv['seller_id_pattern']}`",
+        f"- Seller ID: `{conv['seller_id_pattern']}` - {conv.get('seller_id_note', '')}".rstrip(" -"),
         f"- Sample ASIN for testing: `{conv['sample_asin']}`",
         "",
     ]

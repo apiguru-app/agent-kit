@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.36
+  version: 1.1.37
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 20 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -474,9 +474,11 @@ paths:
       - name: seller_id
         in: query
         required: false
-        description: Restrict results to one seller's offers (Amazon seller id).
+        description: 'Restrict results to one seller''s offers: an Amazon seller id, ''A'' followed by
+          9-20 letters and digits (e.g. A2A1RNLLUK3HYA).'
         schema:
           type: string
+          pattern: ^[Aa][A-Za-z0-9]{9,20}$
       - name: today_deals
         in: query
         required: false
@@ -1369,11 +1371,11 @@ paths:
       - name: seller_ids
         in: query
         required: true
-        description: Comma-separated seller IDs, maximum 10. Each must be 13-15 alphanumeric characters
-          or the whole call 400s.
+        description: Comma-separated seller IDs, maximum 10. Each must be an Amazon seller id -- 'A' followed
+          by 9-20 letters and digits, e.g. A2A1RNLLUK3HYA -- or the whole call 400s.
         schema:
           type: string
-          pattern: ^[A-Za-z0-9]{13,15}(,[A-Za-z0-9]{13,15})*$
+          pattern: ^[Aa][A-Za-z0-9]{9,20}(,[Aa][A-Za-z0-9]{9,20})*$
       - name: geo
         in: query
         required: false
@@ -1480,9 +1482,11 @@ paths:
       - name: seller_id
         in: query
         required: true
-        description: Restrict results to one seller's offers (Amazon seller id).
+        description: 'Amazon seller id whose storefront to list: ''A'' followed by 9-20 letters and digits,
+          the seller= or me= value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required.'
         schema:
           type: string
+          pattern: ^[Aa][A-Za-z0-9]{9,20}$
       - name: query
         in: query
         required: false
@@ -1646,9 +1650,11 @@ paths:
       - name: seller_id
         in: query
         required: true
-        description: Amazon seller ID. Required.
+        description: 'Amazon seller id: ''A'' followed by 9-20 letters and digits, the seller= or me=
+          value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required.'
         schema:
           type: string
+          pattern: ^[Aa][A-Za-z0-9]{9,20}$
       - name: page
         in: query
         required: false
@@ -1754,7 +1760,10 @@ x-apiguru-geos:
 x-apiguru-conventions:
   asin_pattern: ^[A-Z0-9]{10}$
   asin_note: Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.
-  seller_id_pattern: ^[A-Za-z0-9]{13,15}$
+  seller_id_pattern: ^[Aa][A-Za-z0-9]{9,20}$
+  seller_id_note: An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in
+    all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected
+    with 400 before any fetch.
   geo_default: US
   sample_asin: B09DJLW458
   error_semantics:

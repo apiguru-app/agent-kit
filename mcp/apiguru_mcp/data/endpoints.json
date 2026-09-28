@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.36",
+    "version": "1.1.37",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -79,7 +79,8 @@
   "conventions": {
     "asin_pattern": "^[A-Z0-9]{10}$",
     "asin_note": "Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.",
-    "seller_id_pattern": "^[A-Za-z0-9]{13,15}$",
+    "seller_id_pattern": "^[Aa][A-Za-z0-9]{9,20}$",
+    "seller_id_note": "An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected with 400 before any fetch.",
     "geo_default": "US",
     "sample_asin": "B09DJLW458",
     "error_semantics": {
@@ -341,7 +342,8 @@
           },
           "seller_id": {
             "type": "string",
-            "description": "Restrict results to one seller's offers (Amazon seller id)."
+            "description": "Restrict results to one seller's offers: an Amazon seller id, 'A' followed by 9-20 letters and digits (e.g. A2A1RNLLUK3HYA).",
+            "pattern": "^[Aa][A-Za-z0-9]{9,20}$"
           },
           "today_deals": {
             "type": "boolean",
@@ -969,8 +971,8 @@
         "properties": {
           "seller_ids": {
             "type": "string",
-            "description": "Comma-separated seller IDs, maximum 10. Each must be 13-15 alphanumeric characters or the whole call 400s.",
-            "pattern": "^[A-Za-z0-9]{13,15}(,[A-Za-z0-9]{13,15})*$"
+            "description": "Comma-separated seller IDs, maximum 10. Each must be an Amazon seller id -- 'A' followed by 9-20 letters and digits, e.g. A2A1RNLLUK3HYA -- or the whole call 400s.",
+            "pattern": "^[Aa][A-Za-z0-9]{9,20}(,[Aa][A-Za-z0-9]{9,20})*$"
           },
           "geo": {
             "type": "string",
@@ -1042,7 +1044,7 @@
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
       "notes": "Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (Amazon served nothing usable on any route; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.",
-      "item_pattern": "^[A-Za-z0-9]{13,15}$"
+      "item_pattern": "^[Aa][A-Za-z0-9]{9,20}$"
     },
     {
       "name": "seller_products",
@@ -1059,7 +1061,8 @@
         "properties": {
           "seller_id": {
             "type": "string",
-            "description": "Restrict results to one seller's offers (Amazon seller id)."
+            "description": "Amazon seller id whose storefront to list: 'A' followed by 9-20 letters and digits, the seller= or me= value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required.",
+            "pattern": "^[Aa][A-Za-z0-9]{9,20}$"
           },
           "query": {
             "type": "string",
@@ -1200,7 +1203,8 @@
         "properties": {
           "seller_id": {
             "type": "string",
-            "description": "Amazon seller ID. Required."
+            "description": "Amazon seller id: 'A' followed by 9-20 letters and digits, the seller= or me= value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required.",
+            "pattern": "^[Aa][A-Za-z0-9]{9,20}$"
           },
           "page": {
             "type": "integer",

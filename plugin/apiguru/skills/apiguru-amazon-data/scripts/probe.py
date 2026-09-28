@@ -79,7 +79,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.36"
+SKILL_VERSION = "1.1.37"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -143,6 +143,7 @@ RULES = {
             'min_price': {'type': 'number', 'minimum': 0},
             'max_price': {'type': 'number', 'minimum': 0},
             'product_condition': {'type': 'string', 'enum': ['NEW', 'USED', 'RENEWED']},
+            'seller_id': {'type': 'string', 'pattern': '^[Aa][A-Za-z0-9]{9,20}$'},
             'today_deals': {'type': 'boolean'},
             'deal_type': {'type': 'string', 'enum': ['today_deals', 'all_discounts', 'coupons', 'buy_more_save_more']},
             'limit': {'type': 'integer', 'minimum': 0},
@@ -193,13 +194,14 @@ RULES = {
     '/seller-profile': {
         'required': ['seller_ids'],
         'params': {
-            'seller_ids': {'type': 'string', 'item_pattern': '^[A-Za-z0-9]{13,15}$', 'max_items': 10},
+            'seller_ids': {'type': 'string', 'item_pattern': '^[Aa][A-Za-z0-9]{9,20}$', 'max_items': 10},
             'geo': {'type': 'string', 'enum': GEOS},
         },
     },
     '/v2/seller-products': {
         'required': ['seller_id'],
         'params': {
+            'seller_id': {'type': 'string', 'pattern': '^[Aa][A-Za-z0-9]{9,20}$'},
             'page': {'type': 'integer', 'minimum': 1},
             'geo': {'type': 'string', 'enum': GEOS},
             'sort_by': {'type': 'string', 'enum': ['RELEVANCE', 'BEST_SELLERS', 'LOW_HIGH_PRICE', 'HIGH_LOW_PRICE', 'REVIEWS', 'NEWEST']},
@@ -215,6 +217,7 @@ RULES = {
     '/v2/seller-reviews': {
         'required': ['seller_id'],
         'params': {
+            'seller_id': {'type': 'string', 'pattern': '^[Aa][A-Za-z0-9]{9,20}$'},
             'page': {'type': 'integer', 'minimum': 1},
             'from_rating': {'type': 'integer', 'minimum': 1, 'maximum': 5},
             'to_rating': {'type': 'integer', 'minimum': 1, 'maximum': 5},
