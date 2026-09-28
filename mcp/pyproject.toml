@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "apiguru-mcp"
-version = "1.1.37"
+version = "1.1.38"
 description = "MCP server for the Apiguru Amazon Data API - product details, reviews, search, offers and seller data across 20 marketplaces."
 readme = "README.md"
 requires-python = ">=3.10"

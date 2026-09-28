@@ -122,6 +122,9 @@ jobs:
     # npm has deprecated (1.1.24), and a token in the environment would make
     # npm use it instead of OIDC, so NPM_TOKEN is deliberately not read.
     # Provenance comes with it. Needs npm >= 11.5.1; Node 22 ships 10.x.
+    # Pinned to the 11 line: `npm@latest` became 12.1.0 and on 2026-09-28
+    # (v1.1.37) it published with setup-node's placeholder token instead of
+    # the OIDC exchange -- E404 on PUT, every other channel fine.
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -136,7 +139,7 @@ jobs:
       - name: Publish apiguru-mcp to npm (Trusted Publishing)
         working-directory: npm
         run: |
-          npm install -g npm@latest
+          npm install -g npm@11
           npm --version
           npm install --no-audit --no-fund
           npm test
