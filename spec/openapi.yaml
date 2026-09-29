@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.39
+  version: 1.1.40
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 20 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -1419,23 +1419,21 @@ paths:
                   business_name: Example Seller LLC
                 - seller_id: A1B2C3D4E5F6G
                   status: not_found
-                  error: No seller profile for A1B2C3D4E5F6G on the US marketplace; Amazon redirects that
-                    id to its "Page Not Found".
+                  error: No seller profile for A1B2C3D4E5F6G on the US marketplace.
                   code: not_found
                   billed: true
                   retryable: false
                 - seller_id: AXXXXXXXXXXXXX
                   status: unavailable
-                  error: Amazon did not serve the seller profile page for AXXXXXXXXXXXXX (ajax_fragment).
+                  error: The seller profile for AXXXXXXXXXXXXX could not be retrieved right now.
                   code: upstream_unavailable
-                  reason: ajax_fragment
                   billed: false
                   retryable: true
                 billable_requests_count: 2
                 unavailable:
                 - AXXXXXXXXXXXXX
-                note: 1 of 3 seller profile(s) could not be fetched from Amazon and were not billed; each
-                  carries status/code/retryable. Retry those ids.
+                note: 1 of 3 seller profile(s) could not be retrieved and were not billed; each carries
+                  status/code/retryable. Retry those ids.
                 amazon_request_count: 3
                 response_time: 1800
                 country_code: US

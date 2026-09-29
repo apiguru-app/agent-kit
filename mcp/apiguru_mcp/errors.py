@@ -19,6 +19,8 @@ small JSON document with the same shape every time:
 from __future__ import annotations
 
 import json
+import logging
+import os
 from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -52,12 +54,35 @@ class ApiguruError(ToolError):
         return self.detail.get("http_status")
 
 
+logger = logging.getLogger("apiguru_mcp.errors")
+
+
+def hosted() -> bool:
+    """True on the hosted server, which reaches the gateway and the API over
+    a private network (the compose file sets both URLs)."""
+    return bool(os.environ.get("APIGURU_AGENT_INTERNAL_URL") or os.environ.get("APIGURU_API_INTERNAL_URL"))
+
+
+def exception_text(exc: BaseException, context: str) -> str:
+    """The exception, as a suffix for a caller-facing message.
+
+    A local install shows it: it is the user's own process and network.
+    The hosted server logs it and shows nothing -- its exceptions name our
+    private network (owner's rule 2026-09-28: no exception text to callers).
+    """
+    if hosted():
+        logger.warning("%s: %s: %s", context, type(exc).__name__, exc)
+        return ""
+    return f": {exc}"
+
+
 def structured(exc: BaseException) -> ToolError:
     """Wrap anything that is not already structured."""
     if isinstance(exc, ToolError):
         return exc
+    detail = exception_text(exc, "unexpected tool failure")
     return ApiguruError(
-        f"Unexpected failure inside the tool: {type(exc).__name__}: {exc}",
+        "Unexpected failure inside the tool" + (f": {type(exc).__name__}{detail}" if detail else "."),
         retryable=True,
         next_step="Retry once; if it persists, report it at support@apiguru.app.",
     )

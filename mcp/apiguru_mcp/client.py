@@ -38,7 +38,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 
-from .errors import ApiguruError
+from .errors import ApiguruError, exception_text
 from .spec import api_info, endpoints
 
 # Set by the ASGI middleware in http_app.py for the duration of one request.
@@ -354,7 +354,7 @@ async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = 
             ) from exc
         except httpx.HTTPError as exc:
             raise ApiguruError(
-                f"Could not reach the Apiguru API: {exc}",
+                f"Could not reach the Apiguru API{exception_text(exc, f'GET {path}') or '.'}",
                 billed=False, retryable=True, next_step="Retry shortly.",
             ) from exc
 
@@ -477,7 +477,7 @@ async def post_feedback(payload: dict[str, Any]) -> Any:
             response = await client.post(feedback_url(), json=payload, headers=headers)
         except httpx.HTTPError as exc:
             raise ApiguruError(
-                f"Could not reach the feedback wall: {exc}",
+                f"Could not reach the feedback wall{exception_text(exc, 'feedback') or '.'}",
                 billed=False, retryable=True,
                 next_step=f"Open an issue at {GITHUB_ISSUES} instead.",
             ) from exc

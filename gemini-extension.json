@@ -1,6 +1,6 @@
 {
   "name": "apiguru",
-  "version": "1.1.39",
+  "version": "1.1.40",
   "description": "Live Amazon product, review, search, deal, offer/stock and seller data across 20 marketplaces (MCP tools).",
   "mcpServers": {
     "apiguru": {
