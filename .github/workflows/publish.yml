@@ -122,9 +122,11 @@ jobs:
     # npm has deprecated (1.1.24), and a token in the environment would make
     # npm use it instead of OIDC, so NPM_TOKEN is deliberately not read.
     # Provenance comes with it. Needs npm >= 11.5.1; Node 22 ships 10.x.
-    # Pinned to the 11 line: `npm@latest` became 12.1.0 and on 2026-09-28
-    # (v1.1.37) it published with setup-node's placeholder token instead of
-    # the OIDC exchange -- E404 on PUT, every other channel fine.
+    # Pinned to the 11 line that published 1.1.25-1.1.36 (npm@latest is 12.x
+    # now, untested here). An E404 on PUT means npmjs.com does not trust THIS
+    # repository: the trusted-publisher entry is bound to the repository as it
+    # existed, and apiguru-app/agent-kit was re-created on 2026-09-27, so
+    # v1.1.37/1.1.38 were refused until the entry was saved again.
     needs: build
     runs-on: ubuntu-latest
     permissions:

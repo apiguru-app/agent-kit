@@ -41,11 +41,19 @@ except ImportError:  # older SDK: there is no modern era to misroute into
     PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
     HANDSHAKE_PROTOCOL_VERSIONS = ()
     LATEST_MODERN_VERSION = None
+try:  # the routing-header rung of the 2026-07-28 path
+    from mcp.shared.inbound import NAME_BEARING_METHODS, encode_header_value
+except ImportError:  # older SDK: nothing checks the headers
+    NAME_BEARING_METHODS = {}
+
+    def encode_header_value(value: str) -> str:
+        return value
 
 logger = logging.getLogger("apiguru_mcp.traffic")
 
 PROTOCOL_HEADER = b"mcp-protocol-version"
 METHOD_HEADER = b"mcp-method"
+NAME_HEADER = b"mcp-name"
 # `server/discover` exists only in the 2026-07-28 protocol, but clients try it
 # first whatever they speak -- without the envelope, or without any version
 # header -- and the handshake path answers -32601. 34 of those in a day, from
@@ -136,6 +144,44 @@ def modern_only_as_modern(version: str | None, body: Any) -> tuple[dict, str] | 
     }
     params["_meta"] = meta
     return {**body, "params": params}, str(meta[PROTOCOL_VERSION_META_KEY])
+
+
+def missing_routing_headers(version: str | None, body: Any,
+                            sent: dict[bytes, str | None]) -> dict[bytes, bytes] | None:
+    """The Mcp-Method / Mcp-Name headers a modern request left out, from its body.
+
+    The SDK's 2026-07-28 path wants Mcp-Method (and Mcp-Name on tools/call,
+    prompts/get, resources/read) equal to the body, and counts an ABSENT
+    header as a mismatch: -32020. heldfast, which pins a server's tools
+    before a user approves it, sends the version header and the `_meta`
+    envelope but never Mcp-Method, so every tools/list it made was refused
+    (5 of 5 runs, 2026-09-29) and it reported the server as broken.
+
+    Only a header that is absent (or blank) is filled; one that names
+    something else is a real contradiction and keeps the SDK's -32020. Only
+    envelope requests whose body version matches the header qualify:
+    anything else is not on the modern path, or is refused for its version
+    first. `sent` holds the request's own values for both headers.
+    """
+    if LATEST_MODERN_VERSION is None or version is None or version in HANDSHAKE_PROTOCOL_VERSIONS:
+        return None
+    if not isinstance(body, dict):
+        return None
+    method = body.get("method")
+    if not isinstance(method, str) or not method.isascii() or not method.isprintable():
+        return None
+    params = body.get("params")
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    if not isinstance(meta, dict) or meta.get(PROTOCOL_VERSION_META_KEY) != version:
+        return None
+    fill: dict[bytes, bytes] = {}
+    if not (sent.get(METHOD_HEADER) or "").strip():
+        fill[METHOD_HEADER] = method.encode()
+    name_key = NAME_BEARING_METHODS.get(method)
+    name = params.get(name_key) if name_key else None
+    if isinstance(name, str) and not (sent.get(NAME_HEADER) or "").strip():
+        fill[NAME_HEADER] = encode_header_value(name).encode()
+    return fill or None
 
 
 def discover_as_modern(version: str | None, body: Any) -> dict | None:
@@ -303,6 +349,15 @@ class McpTrafficMiddleware:
                     (k, v) for k, v in scope["headers"] if k != PROTOCOL_HEADER
                 ]
                 era = "legacy-by-body"
+            else:
+                filled = missing_routing_headers(version, parsed, {
+                    METHOD_HEADER: _header(scope, METHOD_HEADER),
+                    NAME_HEADER: _header(scope, NAME_HEADER),
+                })
+                if filled:
+                    scope = _with_headers(scope, filled)
+                    # era=modern-filled-mcp-method / modern-filled-mcp-method+mcp-name
+                    era = "modern-filled-" + "+".join(k.decode() for k in filled)
 
             replayed = False
 
