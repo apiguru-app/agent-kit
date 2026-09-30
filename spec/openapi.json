@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Apiguru Amazon Data API",
-    "version": "1.1.40",
+    "version": "1.1.41",
     "summary": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 20 country marketplaces.",
     "description": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 20 country marketplaces.\n\n## Two ways to call this API\n\n**Humans / existing customers** — send `X-API-KEY` against `https://dash.apiguru.app/api/v1`.\n\n**AI agents** — call `https://agent.apiguru.app/agent/v1` with no credentials at all. You get 3 free calls per 24h, then an HTTP 402 with a `PAYMENT-REQUIRED` challenge you settle in USDC (native USDC on each network; on Base 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) on Base mainnet (eip155:8453); also Polygon (eip155:137), Arbitrum (eip155:42161) and Avalanche (eip155:43114). No account, no API key, no subscription.\n\nAn MCP server is available at `https://mcp.apiguru.app/mcp`.\n\n## Retry policy\n\nRetry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are billed -- unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.\n",
     "contact": {
