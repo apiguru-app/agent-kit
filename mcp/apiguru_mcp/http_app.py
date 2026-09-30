@@ -3,11 +3,10 @@
 Two MCP endpoints on one host:
 
 * `/mcp`      keyless. Anyone can call it; the gateway serves a small free
-              probe budget per caller, then answers 402. Send `X-API-KEY`
+              probe budget, then answers 402. Send `X-API-KEY`
               to bill an existing account instead.
-* `/account`  OAuth 2.1 protected. For clients that cannot send headers and
-              call from shared egress addresses (claude.ai, Claude Desktop
-              connectors, ChatGPT connectors). The client discovers the
+* `/account`  OAuth 2.1 protected. For clients that cannot send headers
+              (claude.ai, Claude Desktop connectors, ChatGPT connectors). The client discovers the
               authorization server, registers itself, sends the user to our
               login page, and every tool call then carries a bearer token
               that maps to one Apiguru account. Only mounted when
@@ -17,7 +16,7 @@ A remote server serves many callers at once, so the API key cannot come from
 an environment variable the way it does in stdio mode. The middleware here
 lifts `X-API-KEY` off each incoming request into a ContextVar that client.py
 reads for the duration of that request, and does the same for the caller's
-address so the gateway can key free probes on the real client.
+address.
 
 The transport runs STATELESS by default. In the SDK's stateful mode the tool
 handlers run inside a per-session task that is spawned by the request which

@@ -23,9 +23,6 @@ through untouched. You get exactly the tools `uvx apiguru-mcp` (the Python
 package) serves locally, because that package is itself a thin HTTP client over
 the same gateway.
 
-Free probes are counted per caller, since the connection to the gateway comes
-from your machine rather than from a shared vendor address.
-
 Prefer to run the server itself? `npx apiguru-mcp --local` runs the Python
 package through `uvx` (needs [uv](https://docs.astral.sh/uv/)).
 

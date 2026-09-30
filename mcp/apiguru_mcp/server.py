@@ -282,7 +282,7 @@ def build_server(**server_kwargs: Any) -> MCPServer:
             name=ep["name"],
             title=ep["summary"],
             annotations=READ_ONLY,
-            meta={"price": price_label(ep), "source": ep["source"]},
+            meta={"price": price_label(ep)},
         )
 
     _add_capabilities_tool(server)

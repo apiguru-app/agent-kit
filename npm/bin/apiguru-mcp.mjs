@@ -14,9 +14,6 @@
  * client over the same gateway anyway, so nothing is lost by running it on
  * our side instead of yours.
  *
- * Free probes are counted per caller, because the connection to the gateway
- * originates from THIS machine, not from a shared vendor address.
- *
  * Environment:
  *   APIGURU_API_KEY   optional; sent as X-API-KEY so calls bill that account
  *                     instead of using the free-probe-then-402 path

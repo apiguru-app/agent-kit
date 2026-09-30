@@ -45,7 +45,7 @@ Fetches the complete product record for one ASIN on one marketplace: title, pric
 | `asin` | string | yes | Single Amazon ASIN, 10 uppercase alphanumeric characters. Exactly one - comma-separated lists are rejected; use product_details_batch for many. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
 
-> 404 means the ASIN is absent from that marketplace and IS billed. 503 means our fetch failed and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.
+> 404 means the ASIN is absent from that marketplace and IS billed. 503 is a temporary failure on our side and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.
 
 ## `GET /v2/product-reviews`
 
@@ -58,7 +58,7 @@ Returns the review block for one ASIN: overall star rating, total rating count, 
 | `asin` | string | yes | Single Amazon ASIN, 10 uppercase alphanumeric characters. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
 
-> Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it returns the rating, rating count, the 'customers say' summary and the reviews Amazon shows on the product page itself. There is no paging, star filter or sort -- Amazon's review pages require a signed-in customer, and the API does not sign in. For per-star counts read the rating histogram on product_details.
+> Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it returns the rating, rating count, the 'customers say' summary and the reviews Amazon shows on the product page itself. There is no paging, star filter or sort, and no full review history. For per-star counts read the rating histogram on product_details.
 
 ## `GET /search`
 
@@ -87,7 +87,7 @@ Search Amazon products by keyword. Filters: page, sort_by, category_id (browse n
 
 `deal_type` accepts: `today_deals`, `all_discounts`, `coupons`, `buy_more_save_more`
 
-> Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements use per-marketplace node ids captured from Amazon's own search pages; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says how far `page` can go. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). A bot wall, a page we could not parse or anything that is not a results payload is an unbilled, retryable 503 with code upstream_unavailable and a `reason` (wall, parse_fault, unusable); up to three sessions are tried before that answer.
+> Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says how far `page` can go. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.
 
 ## `GET /product`
 
@@ -112,11 +112,11 @@ Returns the current offer list per ASIN (seller, price, condition, buy-box winne
 |---|---|---|---|
 | `asins` | string | yes | Comma-separated ASIN list, maximum 10. Each must be 10 uppercase alphanumeric characters; malformed entries are rejected with 400. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
-| `check_inventory` | boolean | no | Resolve the true purchasable stock quantity. Slower and bills more upstream requests, so leave off unless you need the number. Default `False`. |
+| `check_inventory` | boolean | no | Resolve the true purchasable stock quantity. Slower and bills more lookups, so leave off unless you need the number. Default `False`. |
 | `offers_count` | string | no | 'all' for every offer (default), 'winner' for the buy-box offer only, or a specific alphanumeric Offer ID. Every offer carries is_buybox_winner; with 'winner' the per-ASIN data holds that one offer and offers_total says how many exist. An ASIN with no featured offer answers an empty list with an explanatory error. The response echoes filters_applied. Default `all`. |
 | `condition` | string | no | Comma-separated condition filter: ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD, USED_ACCEPTABLE (case-insensitive). Omit for every offer. An unknown value is a free 400 listing the allowed ones; it used to be silently treated as ALL. |
 
-> Billed per upstream Amazon request, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler.
+> Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler.
 
 ## `GET /v2/best-sellers`
 
@@ -155,7 +155,7 @@ Returns the current Amazon deals feed: ASIN, title, deal price, list price, disc
 
 `min_product_star_rating` accepts: `4`, `ALL`
 
-> Filters are by id: categories takes a department id or name, brands takes brand ids only; available_filters in every answer lists both with names, and filters_applied / filters_ignored report what Amazon honoured. A page is 30 rows; page with offset=next_offset (null when exhausted); total_count caps at 500. min_price, max_price, min_discount and max_discount are applied to the rows after the fetch, scanning up to 3 upstream pages per call, so a page can hold fewer than 30 rows and total_count does not reflect them. An empty answer carries a hint saying why. Deal prices expire: check deal_ends_at. The older price_range and discount_range parameters are still accepted, as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 / 50 / 70 percent off or more) or as bands such as 25-50 and 70+.
+> Filters are by id: categories takes a department id or name, brands takes brand ids only; available_filters in every answer lists both with names, and filters_applied / filters_ignored report what Amazon honoured. A page is 30 rows; page with offset=next_offset (null when exhausted); total_count caps at 500. min_price, max_price, min_discount and max_discount are applied to the rows after retrieval, scanning up to 3 feed pages per call, so a page can hold fewer than 30 rows and total_count does not reflect them. An empty answer carries a hint saying why. Deal prices expire: check deal_ends_at. The older price_range and discount_range parameters are still accepted, as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 / 50 / 70 percent off or more) or as bands such as 25-50 and 70+.
 
 ## `GET /seller-profile`
 
@@ -168,7 +168,7 @@ Returns the storefront profile for each seller id: business name, rating, feedba
 | `seller_ids` | string | yes | Comma-separated seller IDs, maximum 10. Each must be an Amazon seller id -- 'A' followed by 9-20 letters and digits, e.g. A2A1RNLLUK3HYA -- or the whole call 400s. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
 
-> Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (Amazon served nothing usable on any route; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.
+> Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (could not be retrieved right now; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.
 
 ## `GET /v2/seller-products`
 

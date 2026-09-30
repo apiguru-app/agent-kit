@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.41
+  version: 1.1.42
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 20 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -110,10 +110,10 @@ paths:
         **Price:** $0.003 per call
 
 
-        **Notes:** 404 means the ASIN is absent from that marketplace and IS billed. 503 means our fetch
-        failed and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing;
-        on multi-variant listings they can describe the product family rather than the exact variant.
-        A null field means Amazon did not show it.'
+        **Notes:** 404 means the ASIN is absent from that marketplace and IS billed. 503 is a temporary
+        failure on our side and is NOT billed - retry. Bullet points and specs are what Amazon shows for
+        the listing; on multi-variant listings they can describe the product family rather than the exact
+        variant. A null field means Amazon did not show it.'
       tags:
       - Amazon Data
       parameters:
@@ -195,9 +195,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404': &id005
-          description: The ASIN genuinely does not exist on that marketplace. BILLED - the upstream fetch
-            was performed and the bad input was the caller's. Retrying will not help; try a different
-            geo.
+          description: The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was
+            performed and the bad input was the caller's. Retrying will not help; try a different geo.
           content:
             application/json:
               schema:
@@ -221,30 +220,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '502': &id009
-          description: 'Bad gateway -- our reverse proxy could not get an answer from the gateway. NOT
-            billed. Same class as 503: retry with backoff.'
+          description: 'Bad gateway. NOT billed. Same class as 503: retry with backoff.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '503': &id010
-          description: Upstream fetch failed on our side (block, parse fault). NOT billed. Safe and correct
-            to retry.
+          description: Temporary failure on our side. NOT billed. Safe and correct to retry.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '504': &id011
-          description: Gateway timeout. The upstream fetch ran past its deadline. NOT billed. Retry with
-            backoff; a narrower query often succeeds.
+          description: 'Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff;
+            a narrower query often succeeds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         timeout: &id012
           description: No response before your own client's deadline. Nothing is billed for a request
-            we never answered. Cold-geo sessions are the slow case and are bounded at 25s server-side;
-            allow 60s.
+            we never answered. Some marketplaces answer more slowly than others; allow 60s.
           content:
             application/json:
               schema:
@@ -252,7 +248,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/product_details_bp.py
   /v2/product-reviews:
     get:
       operationId: product_reviews
@@ -266,9 +261,8 @@ paths:
 
         **Notes:** Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it
         returns the rating, rating count, the ''customers say'' summary and the reviews Amazon shows on
-        the product page itself. There is no paging, star filter or sort -- Amazon''s review pages require
-        a signed-in customer, and the API does not sign in. For per-star counts read the rating histogram
-        on product_details.'
+        the product page itself. There is no paging, star filter or sort, and no full review history.
+        For per-star counts read the rating histogram on product_details.'
       tags:
       - Amazon Data
       parameters:
@@ -339,7 +333,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/product_reviews_v2_bp.py
   /search:
     get:
       operationId: search
@@ -355,22 +348,20 @@ paths:
 
         **Notes:** Blank values and the literal string ''null'' are treated as unset. Invalid page, sort_by,
         price, product_condition or deal_type is a free 400 naming the parameter and the allowed values.
-        Condition and deal refinements use per-marketplace node ids captured from Amazon''s own search
-        pages; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored,
-        never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`,
-        `product_price` and `product_original_price` are decimal strings; a null field means Amazon did
-        not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers
-        Prime delivery. `metadata.total_pages` says how far `page` can go. A full page is up to 48 results
-        and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries
-        `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective
-        sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon''s query-scoped popularity,
-        not a category rank: a row''s `badges` / `is_best_seller` are what the result card showed for
-        this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details
-        reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers.
-        An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total
-        is 0 and `hint` says so). A bot wall, a page we could not parse or anything that is not a results
-        payload is an unbilled, retryable 503 with code upstream_unavailable and a `reason` (wall, parse_fault,
-        unusable); up to three sessions are tried before that answer.'
+        Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered
+        feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and
+        `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price`
+        are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result
+        carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says
+        how far `page` can go. A full page is up to 48 results and about 54 KB; the tool returns the first
+        10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection`
+        and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS
+        ordering is Amazon''s query-scoped popularity, not a category rank: a row''s `badges` / `is_best_seller`
+        are what the result card showed for this query, and an ASIN that is #1 in its subcategory can
+        carry no badge here while product_details reports best_seller=true with the rank. For a rank claim,
+        use product_details or best_sellers. An empty `products` list is served as success only when Amazon
+        itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a
+        usable result is an unbilled, retryable 503 with code upstream_unavailable.'
       tags:
       - Amazon Data
       parameters:
@@ -562,7 +553,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/search_product_bp.py
   /product:
     get:
       operationId: product_details_batch
@@ -652,7 +642,6 @@ paths:
         countSeparator: ','
         maxItems: 20
         countDedup: true
-      x-apiguru-source: blueprints/product_details_batch_bp.py
   /stock:
     get:
       operationId: offers_stock
@@ -664,10 +653,10 @@ paths:
         **Price:** $0.0045 per item (max 10)
 
 
-        **Notes:** Billed per upstream Amazon request, which is more than one per ASIN when check_inventory
-        is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps
-        the full count); it used to scope only the inventory check and return every offer. /scrape is
-        a legacy alias for the same handler.'
+        **Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner
+        returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to
+        scope only the inventory check and return every offer. /scrape is a legacy alias for the same
+        handler.'
       tags:
       - Amazon Data
       parameters:
@@ -710,8 +699,8 @@ paths:
       - name: check_inventory
         in: query
         required: false
-        description: Resolve the true purchasable stock quantity. Slower and bills more upstream requests,
-          so leave off unless you need the number.
+        description: Resolve the true purchasable stock quantity. Slower and bills more lookups, so leave
+          off unless you need the number.
         schema:
           type: boolean
           default: false
@@ -781,7 +770,6 @@ paths:
         countSeparator: ','
         maxItems: 10
         countDedup: false
-      x-apiguru-source: blueprints/offers_stock_bp.py
   /scrape:
     get:
       operationId: offers_stock_alias
@@ -793,10 +781,10 @@ paths:
         **Price:** $0.0045 per item (max 10)
 
 
-        **Notes:** Billed per upstream Amazon request, which is more than one per ASIN when check_inventory
-        is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps
-        the full count); it used to scope only the inventory check and return every offer. /scrape is
-        a legacy alias for the same handler.'
+        **Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner
+        returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to
+        scope only the inventory check and return every offer. /scrape is a legacy alias for the same
+        handler.'
       tags:
       - Amazon Data
       parameters:
@@ -839,8 +827,8 @@ paths:
       - name: check_inventory
         in: query
         required: false
-        description: Resolve the true purchasable stock quantity. Slower and bills more upstream requests,
-          so leave off unless you need the number.
+        description: Resolve the true purchasable stock quantity. Slower and bills more lookups, so leave
+          off unless you need the number.
         schema:
           type: boolean
           default: false
@@ -917,9 +905,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: The ASIN genuinely does not exist on that marketplace. BILLED - the upstream fetch
-            was performed and the bad input was the caller's. Retrying will not help; try a different
-            geo.
+          description: The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was
+            performed and the bad input was the caller's. Retrying will not help; try a different geo.
           content:
             application/json:
               schema:
@@ -943,30 +930,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '502':
-          description: 'Bad gateway -- our reverse proxy could not get an answer from the gateway. NOT
-            billed. Same class as 503: retry with backoff.'
+          description: 'Bad gateway. NOT billed. Same class as 503: retry with backoff.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: Upstream fetch failed on our side (block, parse fault). NOT billed. Safe and correct
-            to retry.
+          description: Temporary failure on our side. NOT billed. Safe and correct to retry.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '504':
-          description: Gateway timeout. The upstream fetch ran past its deadline. NOT billed. Retry with
-            backoff; a narrower query often succeeds.
+          description: 'Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff;
+            a narrower query often succeeds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         timeout:
           description: No response before your own client's deadline. Nothing is billed for a request
-            we never answered. Cold-geo sessions are the slow case and are bounded at 25s server-side;
-            allow 60s.
+            we never answered. Some marketplaces answer more slowly than others; allow 60s.
           content:
             application/json:
               schema:
@@ -978,7 +962,6 @@ paths:
         countSeparator: ','
         maxItems: 10
         countDedup: false
-      x-apiguru-source: blueprints/offers_stock_bp.py
       deprecated: true
   /v2/best-sellers:
     get:
@@ -1132,7 +1115,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/best_sellers_bp.py
   /v2/deals:
     get:
       operationId: deals
@@ -1151,11 +1133,11 @@ paths:
         only; available_filters in every answer lists both with names, and filters_applied / filters_ignored
         report what Amazon honoured. A page is 30 rows; page with offset=next_offset (null when exhausted);
         total_count caps at 500. min_price, max_price, min_discount and max_discount are applied to the
-        rows after the fetch, scanning up to 3 upstream pages per call, so a page can hold fewer than
-        30 rows and total_count does not reflect them. An empty answer carries a hint saying why. Deal
-        prices expire: check deal_ends_at. The older price_range and discount_range parameters are still
-        accepted, as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 /
-        50 / 70 percent off or more) or as bands such as 25-50 and 70+.'
+        rows after retrieval, scanning up to 3 feed pages per call, so a page can hold fewer than 30 rows
+        and total_count does not reflect them. An empty answer carries a hint saying why. Deal prices
+        expire: check deal_ends_at. The older price_range and discount_range parameters are still accepted,
+        as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 / 50 / 70 percent
+        off or more) or as bands such as 25-50 and 70+.'
       tags:
       - Amazon Data
       parameters:
@@ -1346,7 +1328,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/deals_bp.py
   /seller-profile:
     get:
       operationId: seller_profile_batch
@@ -1360,11 +1341,10 @@ paths:
 
         **Notes:** Seller ID validation is all-or-nothing: one malformed id rejects the entire request
         with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon
-        has no page for that id on this marketplace; billed, like a 404) or `unavailable` (Amazon served
-        nothing usable on any route; NOT billed on the keyed path, `retryable: true`). A row is never
-        null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item
-        quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting
-        a partial refund.'
+        has no page for that id on this marketplace; billed, like a 404) or `unavailable` (could not be
+        retrieved right now; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count
+        counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so
+        retry `unavailable` ids in a separate call rather than expecting a partial refund.'
       tags:
       - Amazon Data
       parameters:
@@ -1457,7 +1437,6 @@ paths:
         countSeparator: ','
         maxItems: 10
         countDedup: false
-      x-apiguru-source: blueprints/seller_profile_batch_bp.py
   /v2/seller-products:
     get:
       operationId: seller_products
@@ -1628,7 +1607,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/seller_products_bp.py
   /v2/seller-reviews:
     get:
       operationId: seller_reviews
@@ -1733,7 +1711,6 @@ paths:
       x-apiguru-price:
         model: flat
         priceUsd: '0.003'
-      x-apiguru-source: blueprints/seller_reviews_bp.py
 x-apiguru-geos:
   US: com
   CA: ca
@@ -1770,18 +1747,17 @@ x-apiguru-conventions:
     '402': Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed
       path it means the account balance is exhausted.
     '403': Account disabled, or no active subscription plan.
-    '404': The ASIN genuinely does not exist on that marketplace. BILLED - the upstream fetch was performed
-      and the bad input was the caller's. Retrying will not help; try a different geo.
+    '404': The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and
+      the bad input was the caller's. Retrying will not help; try a different geo.
     '413': Too many items in a batch request.
     '429': Per-second rate limit exceeded for the plan. Back off and retry.
     '500': Internal error. NOT billed.
-    '502': 'Bad gateway -- our reverse proxy could not get an answer from the gateway. NOT billed. Same
-      class as 503: retry with backoff.'
-    '503': Upstream fetch failed on our side (block, parse fault). NOT billed. Safe and correct to retry.
-    '504': Gateway timeout. The upstream fetch ran past its deadline. NOT billed. Retry with backoff;
-      a narrower query often succeeds.
+    '502': 'Bad gateway. NOT billed. Same class as 503: retry with backoff.'
+    '503': Temporary failure on our side. NOT billed. Safe and correct to retry.
+    '504': 'Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower
+      query often succeeds.'
     timeout: No response before your own client's deadline. Nothing is billed for a request we never answered.
-      Cold-geo sessions are the slow case and are bounded at 25s server-side; allow 60s.
+      Some marketplaces answer more slowly than others; allow 60s.
   retry_policy: 'Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are
     billed -- unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413:
     the request itself is the problem and repeating it will not change the answer.'

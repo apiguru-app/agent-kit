@@ -28,14 +28,14 @@ single-item equivalents. Always prefer them for more than one item.
 | `401` | - | Missing or invalid API key on the keyed path. |
 | `402` | - | Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed path it means the account balance is exhausted. |
 | `403` | - | Account disabled, or no active subscription plan. |
-| `404` | **yes** | The ASIN genuinely does not exist on that marketplace. BILLED - the upstream fetch was performed and the bad input was the caller's. Retrying will not help; try a different geo. |
+| `404` | **yes** | The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo. |
 | `413` | - | Too many items in a batch request. |
 | `429` | - | Per-second rate limit exceeded for the plan. Back off and retry. |
 | `500` | no | Internal error. NOT billed. |
-| `502` | no | Bad gateway -- our reverse proxy could not get an answer from the gateway. NOT billed. Same class as 503: retry with backoff. |
-| `503` | no | Upstream fetch failed on our side (block, parse fault). NOT billed. Safe and correct to retry. |
-| `504` | no | Gateway timeout. The upstream fetch ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds. |
-| `timeout` | - | No response before your own client's deadline. Nothing is billed for a request we never answered. Cold-geo sessions are the slow case and are bounded at 25s server-side; allow 60s. |
+| `502` | no | Bad gateway. NOT billed. Same class as 503: retry with backoff. |
+| `503` | no | Temporary failure on our side. NOT billed. Safe and correct to retry. |
+| `504` | no | Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds. |
+| `timeout` | - | No response before your own client's deadline. Nothing is billed for a request we never answered. Some marketplaces answer more slowly than others; allow 60s. |
 
 ## Retry policy
 
@@ -61,7 +61,7 @@ cause is permanent says `retryable: false` and is not worth repeating.
 
 ## Free probes
 
-The keyless gateway serves a few free requests per IP per rolling
+The keyless gateway serves a few free requests per client per rolling
 window before it starts charging. Response header
 `X-Free-Probes-Remaining` tells you how many are left, and
 `X-Price-Next-Call` what the next one will cost.

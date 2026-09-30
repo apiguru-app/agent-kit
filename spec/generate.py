@@ -118,7 +118,8 @@ def build_openapi(spec):
                 **shared_errors,
             },
             "x-apiguru-price": price_extension(ep),
-            "x-apiguru-source": ep["source"],
+            # No x-apiguru-source: `source` names our backend files, which is
+            # for drift checks here, not for the published document.
         }
 
         for path in [ep["path"]] + ep.get("aliases", []):
@@ -424,10 +425,9 @@ def build_llms_txt(spec):
         "exactly what to pay. Any x402-capable HTTP client settles it and "
         "retries automatically.",
         f"- Paid in **{agent_auth['asset']}** on **{agent_auth['network']}**.",
-        "- Watch `X-Free-Probes-Remaining` and `X-Price-Next-Call` on every "
+        "- Watch `X-Free-Probes-Remaining` (or `X-Free-Probes-Available: "
+        "yes|no` where no count is given) and `X-Price-Next-Call` on every "
         "response to know where you stand before you get a 402.",
-        "",
-        f"Free probes are counted by client IP. {free['counted_by']}",
         "",
         "## Paying",
         "",
@@ -626,31 +626,27 @@ def build_llms_txt(spec):
         "`/search` for `crocs black` returns B0014C0LUC with "
         "`badges: [\"Overall Pick\"]` and `is_amazon_choice: true`, while "
         "`/v2/product-details` for the same ASIN, seconds later, returns "
-        "`amazon_choice: false`. Both are correct. We captured the live "
-        "product page to check: it contains no badge markup at all. The badge "
+        "`amazon_choice: false`. Both are correct: Amazon's product page for "
+        "that ASIN shows no badge at all. The badge "
         "belongs to the pair (product, query), so it exists in a result list "
         "and not on the product itself. Read it from the `/search` row that "
         "carried it, and record the query alongside it -- \"Amazon's Choice\" "
         "with no query attached does not mean anything.",
         "",
-        "- **`/product` and `/v2/product-details` read different Amazon "
-        "surfaces, and some fields differ because of it.** The batch endpoint "
-        "reads Amazon's mobile API, the single one reads the product page. "
-        "For B0014C0LUC the batch reports `Date First Available: September 1, "
-        "2023` (mobile field `site_launch_date`) and the detail page reports "
-        "`April 3, 2025`. We checked the page: it says April 3, 2025 and "
-        "contains no mention of 2023, so both are faithful readings of their "
-        "own source rather than a parsing fault. Use `/v2/product-details` "
-        "when you want what a person sees on the listing. If a date matters "
-        "to your decision, say which endpoint it came from. "
+        "- **`/product` and `/v2/product-details` can disagree on a few "
+        "fields.** For B0014C0LUC the batch reports `Date First Available: "
+        "September 1, 2023` and the detail endpoint reports `April 3, 2025`, "
+        "which is the date the listing itself shows. Use "
+        "`/v2/product-details` when you want what a person sees on the "
+        "listing. If a date matters to your decision, say which endpoint it "
+        "came from. "
         "**Do not read `Date First Available` as the product's age at all**: "
         "it tracks the listing record, which Amazon re-dates. Seen twice -- "
         "B0014C0LUC shows April 3, 2025 against 488,443 ratings, B008YA0Z44 "
         "shows October 1, 2025 against 50,879. Neither count can accumulate "
-        "in that window. We checked the page for the first and it carries "
-        "the date we return, so this is Amazon's value, not a parse fault. "
-        "For how established a product is, use `product_num_ratings` and the "
-        "best-seller rank.",
+        "in that window, yet the first date is the one Amazon's listing "
+        "shows. For how established a product is, use `product_num_ratings` "
+        "and the best-seller rank.",
         "",
         "- **Refurbished listings report their real condition.** This was "
         "briefly wrong and is fixed: B0G4RV4F71, titled \"... (Renewed "
@@ -658,7 +654,7 @@ def build_llms_txt(spec):
         "\"Refurbished - Premium\", so that was our bug, not a value from "
         "Amazon. It now returns `condition: \"refurbished - premium\"` with "
         "`buybox_winner.condition.is_new: false`. The correction only ever "
-        "moves a condition away from new and only on evidence from the page, "
+        "moves a condition away from new and only on evidence from the listing, "
         "never the reverse -- calling a refurbished item new is the "
         "expensive direction of this mistake. Cross-check "
         "`product_title` for \"Renewed\" or \"Refurbished\" anyway if the "
@@ -853,7 +849,7 @@ def build_errors_md(spec):
         "",
         "## Free probes",
         "",
-        "The keyless gateway serves a few free requests per IP per rolling",
+        "The keyless gateway serves a few free requests per client per rolling",
         "window before it starts charging. Response header",
         "`X-Free-Probes-Remaining` tells you how many are left, and",
         "`X-Price-Next-Call` what the next one will cost.",

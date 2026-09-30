@@ -2,12 +2,12 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.41",
+    "version": "1.1.42",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
     "mcp_account_url": "https://mcp.apiguru.app/account",
-    "mcp_account_note": "OAuth 2.1 (PKCE, dynamic client registration). For clients that cannot send headers and call from shared addresses: claude.ai, Claude Desktop and ChatGPT connectors. The user signs in with their Apiguru dashboard credentials or API key; calls bill that account.",
+    "mcp_account_note": "OAuth 2.1 (PKCE, dynamic client registration). For clients that cannot send headers: claude.ai, Claude Desktop and ChatGPT connectors. The user signs in with their Apiguru dashboard credentials or API key; calls bill that account.",
     "docs_url": "https://github.com/apiguru-app/agent-kit#readme",
     "contact": "support@apiguru.app",
     "description": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 20 country marketplaces.",
@@ -25,18 +25,17 @@
         "network": "Base mainnet (eip155:8453); also Polygon (eip155:137), Arbitrum (eip155:42161) and Avalanche (eip155:43114)",
         "asset": "USDC (native USDC on each network; on Base 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)",
         "note": "Keyless. Call agent_base_url with no credentials at all. You get a small free probe budget, then HTTP 402 with a PAYMENT-REQUIRED challenge you can settle autonomously in USDC on Base, Polygon, Arbitrum or Avalanche. No account, no API key, no subscription, no signup.",
-        "settlement": "Verify, serve, settle: the signed payment is only settled on-chain after the upstream answers with a billable status (2xx, or the 404 that is billed). A 5xx, 400, 413 or 429 is returned with X-Payment-Status: not-settled and nothing is charged."
+        "settlement": "Verify, serve, settle: the signed payment is only settled on-chain after the request is answered with a billable status (2xx, or the 404 that is billed). A 5xx, 400, 413 or 429 is returned with X-Payment-Status: not-settled and nothing is charged."
       }
     },
     "free_tier": {
       "probes_per_client": 3,
       "window_hours": 24,
-      "counted_by": "IPv6 addresses are bucketed to their /64, so every address in one allocation shares a single budget. Forged proxy headers do not create new budgets.",
       "response_headers": {
         "X-Free-Probes-Remaining": "How many free calls are left for you.",
         "X-Price-Next-Call": "What the next call will cost once they run out."
       },
-      "note": "Free probes exist so an agent can verify this API fits its task before spending anything. They are deliberately small. A probe the upstream could not serve (5xx) is handed back. Every discovery surface below is free and unmetered."
+      "note": "Free probes exist so an agent can verify this API fits its task before spending anything. They are deliberately small. A free call that fails on our side (5xx) is handed back. Every discovery surface below is free and unmetered."
     },
     "free_endpoints": [
       "/health",
@@ -88,14 +87,14 @@
       "401": "Missing or invalid API key on the keyed path.",
       "402": "Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed path it means the account balance is exhausted.",
       "403": "Account disabled, or no active subscription plan.",
-      "404": "The ASIN genuinely does not exist on that marketplace. BILLED - the upstream fetch was performed and the bad input was the caller's. Retrying will not help; try a different geo.",
+      "404": "The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo.",
       "413": "Too many items in a batch request.",
       "429": "Per-second rate limit exceeded for the plan. Back off and retry.",
       "500": "Internal error. NOT billed.",
-      "502": "Bad gateway -- our reverse proxy could not get an answer from the gateway. NOT billed. Same class as 503: retry with backoff.",
-      "503": "Upstream fetch failed on our side (block, parse fault). NOT billed. Safe and correct to retry.",
-      "504": "Gateway timeout. The upstream fetch ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
-      "timeout": "No response before your own client's deadline. Nothing is billed for a request we never answered. Cold-geo sessions are the slow case and are bounded at 25s server-side; allow 60s."
+      "502": "Bad gateway. NOT billed. Same class as 503: retry with backoff.",
+      "503": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+      "504": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+      "timeout": "No response before your own client's deadline. Nothing is billed for a request we never answered. Some marketplaces answer more slowly than others; allow 60s."
     },
     "retry_policy": "Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are billed -- unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.",
     "sample_seller_id": "A2A1RNLLUK3HYA"
@@ -108,7 +107,7 @@
       "method": "GET",
       "summary": "Full product detail for a single ASIN",
       "description": "Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.",
-      "bazaar_description": "Real-time Amazon product data for any ASIN: title, current price, star rating, review count, images, feature bullets, variations and category. Covers 20 country marketplaces including US, UK, DE, JP, IN and BR. Returns live data scraped at request time, not a cache.",
+      "bazaar_description": "Real-time Amazon product data for any ASIN: title, current price, star rating, review count, images, feature bullets, variations and category. Covers 20 country marketplaces including US, UK, DE, JP, IN and BR. Returns live data fetched at request time, not a cache.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -163,7 +162,7 @@
         },
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "404 means the ASIN is absent from that marketplace and IS billed. 503 means our fetch failed and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.",
+      "notes": "404 means the ASIN is absent from that marketplace and IS billed. 503 is a temporary failure on our side and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.",
       "mcp_params": {
         "compact": {
           "type": "boolean",
@@ -239,7 +238,7 @@
         },
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it returns the rating, rating count, the 'customers say' summary and the reviews Amazon shows on the product page itself. There is no paging, star filter or sort -- Amazon's review pages require a signed-in customer, and the API does not sign in. For per-star counts read the rating histogram on product_details.",
+      "notes": "Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it returns the rating, rating count, the 'customers say' summary and the reviews Amazon shows on the product page itself. There is no paging, star filter or sort, and no full review history. For per-star counts read the rating histogram on product_details.",
       "mcp_params": {
         "max_reviews": {
           "type": "integer",
@@ -418,7 +417,7 @@
         "amazon_request_count": 1,
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements use per-marketplace node ids captured from Amazon's own search pages; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says how far `page` can go. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). A bot wall, a page we could not parse or anything that is not a results payload is an unbilled, retryable 503 with code upstream_unavailable and a `reason` (wall, parse_fault, unusable); up to three sessions are tried before that answer.",
+      "notes": "Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says how far `page` can go. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
       "mcp_params": {
         "limit": {
           "type": "integer",
@@ -576,7 +575,7 @@
           "check_inventory": {
             "type": "boolean",
             "default": false,
-            "description": "Resolve the true purchasable stock quantity. Slower and bills more upstream requests, so leave off unless you need the number."
+            "description": "Resolve the true purchasable stock quantity. Slower and bills more lookups, so leave off unless you need the number."
           },
           "offers_count": {
             "type": "string",
@@ -624,7 +623,7 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per upstream Amazon request, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler.",
+      "notes": "Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler.",
       "item_pattern": "^[A-Z0-9]{10}$"
     },
     {
@@ -932,7 +931,7 @@
         "amazon_request_count": 1,
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Filters are by id: categories takes a department id or name, brands takes brand ids only; available_filters in every answer lists both with names, and filters_applied / filters_ignored report what Amazon honoured. A page is 30 rows; page with offset=next_offset (null when exhausted); total_count caps at 500. min_price, max_price, min_discount and max_discount are applied to the rows after the fetch, scanning up to 3 upstream pages per call, so a page can hold fewer than 30 rows and total_count does not reflect them. An empty answer carries a hint saying why. Deal prices expire: check deal_ends_at. The older price_range and discount_range parameters are still accepted, as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 / 50 / 70 percent off or more) or as bands such as 25-50 and 70+.",
+      "notes": "Filters are by id: categories takes a department id or name, brands takes brand ids only; available_filters in every answer lists both with names, and filters_applied / filters_ignored report what Amazon honoured. A page is 30 rows; page with offset=next_offset (null when exhausted); total_count caps at 500. min_price, max_price, min_discount and max_discount are applied to the rows after retrieval, scanning up to 3 feed pages per call, so a page can hold fewer than 30 rows and total_count does not reflect them. An empty answer carries a hint saying why. Deal prices expire: check deal_ends_at. The older price_range and discount_range parameters are still accepted, as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 / 50 / 70 percent off or more) or as bands such as 25-50 and 70+.",
       "mcp_params": {
         "limit": {
           "type": "integer",
@@ -1042,7 +1041,7 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (Amazon served nothing usable on any route; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.",
+      "notes": "Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (could not be retrieved right now; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.",
       "item_pattern": "^[Aa][A-Za-z0-9]{9,20}$"
     },
     {

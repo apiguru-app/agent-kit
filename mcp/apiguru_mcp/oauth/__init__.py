@@ -1,9 +1,7 @@
 """OAuth 2.1 for the hosted MCP server.
 
 Why this exists: claude.ai, Claude Desktop connectors and ChatGPT connectors
-call MCP servers from their vendors' shared egress addresses and cannot send
-custom headers. On the keyless endpoint every one of their users therefore
-shares a single free-probe budget, and there is no way to present an API
+cannot send custom headers, so there is no way for them to present an API
 key. OAuth is the only door those clients can walk through: they discover
 the authorization server, register themselves, send the user to our login
 page, and from then on every tool call carries a bearer token that maps to

@@ -28,9 +28,9 @@ Nothing else in this skill sends data anywhere.
 - **Free quota:** 3 calls per machine per 24 hours. After that the gateway
   answers `402 Payment Required`. **The answer knows better than this
   page:** every keyless reply carries `free_calls_remaining` in the body and
-  `X-Free-Probes-Remaining` (or `X-Free-Probes-Available: yes|no` for a
-  shared allowance) in the headers. Allowances differ by caller, so plan a
-  task on the figure in the last reply, never on the number above.
+  `X-Free-Probes-Remaining` (or `X-Free-Probes-Available: yes|no` where no
+  count is given) in the headers. Plan a task on the last reply, never on
+  the number above.
 - **This skill never pays.** `probe.py` stops at a 402 and tells you so. It
   contains no wallet and no x402 client, and it will not set one up. Paying is
   the user's decision, made one of two ways, both only with their explicit
@@ -202,11 +202,11 @@ Pick (Amazon renamed that slot to "Overall Pick"); `is_amazon_choice` and
 
 - **`404`** — the item genuinely is not on that marketplace. **Billed** on the
   keyed path. Retrying will not help; try a different `geo` or accept it.
-- **`503`** — an Apiguru-side fetch failure. **Not billed.** Retry with
+- **`503`** — a temporary Apiguru-side failure. **Not billed.** Retry with
   backoff. `500`, `502` and `504` are the same class: not billed, retry.
 - **`429`** — rate limited. Back off, then retry.
 - **no answer** (your client timed out) — nothing was billed for a request we
-  never answered; retry. Cold marketplaces can take up to 25s; allow 60s.
+  never answered; retry. Some marketplaces answer more slowly; allow 60s.
 - **`400`** — your input was wrong (bad ASIN format, unknown geo, missing
   required parameter). Not billed. Fix the input; do not retry unchanged.
 - **`402`** — free probes spent. **Stop and ask the user** (see "Costs and
@@ -268,7 +268,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.41"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.42"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -285,10 +285,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.41"] } } }
+  "args": ["apiguru-mcp==1.1.42"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.41"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.42"]`.
 
 Whichever you choose:
 

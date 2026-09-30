@@ -70,9 +70,8 @@ Apiguru dashboard e-mail and password or paste an API key (Google sign-in
 accounts use the key). Every call then bills your account at your plan's
 rates. Disconnect from the client to revoke.
 
-These clients call from their vendor's shared addresses and cannot send
-headers, which is why the keyless endpoint below is the wrong choice for them:
-all of their users would share one free-probe budget.
+These clients cannot send headers, so signing in is how they bill your own
+account; the keyless endpoint below is meant for clients that can.
 
 ### Remote, keyless (Claude Code, Codex, Hermes, any agent that can send headers)
 
@@ -107,7 +106,7 @@ Some errors cost money and some do not:
 
 - **404** — the item genuinely isn't on that marketplace. **Billed.** Retrying
   won't help; try a different `geo`.
-- **503** — an Apiguru-side fetch failure. **Not billed.** Retry. On the
+- **503** — a temporary Apiguru-side failure. **Not billed.** Retry. On the
   keyless path a free probe spent on a 503 is handed back, and a signed x402
   payment is left unsettled (`X-Payment-Status: not-settled`).
 - **429** — rate limit. Back off and retry.
@@ -125,7 +124,7 @@ Some errors cost money and some do not:
 | `APIGURU_MCP_ALLOWED_HOSTS` | `mcp.apiguru.app,localhost,127.0.0.1` | Hosts the HTTP transport accepts. Must include the public hostname when running behind a reverse proxy, or every request is rejected with 421. |
 | `APIGURU_MCP_ALLOWED_ORIGINS` | derived | CORS/DNS-rebinding origin allowlist |
 | `APIGURU_MCP_STATELESS` | `true` | Stateless streamable HTTP. Keep it on: in stateful mode the SDK snapshots each session's request context at `initialize`, so a key sent on a later request would be ignored. |
-| `APIGURU_AGENT_INTERNAL_URL` | unset | Hosted deployments only: the gateway's address on the private network. With `AGENT_INTERNAL_TOKEN` set, keyless calls go there and carry the real caller's address so free probes are keyed per caller, not per MCP container. |
+| `APIGURU_AGENT_INTERNAL_URL` | unset | Hosted deployments only: the gateway's address on the private network. With `AGENT_INTERNAL_TOKEN` set, keyless calls go there and carry the real caller's address. |
 | `APIGURU_OAUTH_ENABLED` | `false` | Hosted deployments only: mount the OAuth 2.1 endpoint at `/account` (needs `DATABASE_URL`; tokens are stored hashed in `mcp_oauth_*` tables). |
 | `APIGURU_MCP_PUBLIC_URL` | from spec | The OAuth issuer, e.g. `https://mcp.apiguru.app`. |
 | `APIGURU_API_INTERNAL_URL` | unset | Hosted deployments only: the backend on the private network, used for keyed calls and for proxying password logins to its `/login`. |
@@ -154,5 +153,5 @@ python agent-kit/spec/generate.py
 ## Links
 
 - API docs: https://dash.apiguru.app/docs
-- OpenAPI spec: https://dash.apiguru.app/api/v1/openapi.json
+- OpenAPI spec: https://dash.apiguru.app/openapi.json
 - Get an API key: https://dash.apiguru.app/register

@@ -79,7 +79,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.41"
+SKILL_VERSION = "1.1.42"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -605,8 +605,8 @@ def request(path: str, params: dict[str, str], api_key: str | None, retries: int
 
 def explain(status: int, headers: dict) -> None:
     """Say what a status means for cost and for what to do next."""
-    # The live figure beats any number in the docs: allowances differ by
-    # caller, and a shared allowance reports yes/no rather than a count.
+    # The live figure beats any number in the docs, and some answers report
+    # yes/no rather than a count.
     left = header(headers, "X-Free-Probes-Remaining")
     available = header(headers, "X-Free-Probes-Available")
     note = header(headers, "X-Price-Next-Call") or ""
@@ -631,8 +631,8 @@ def explain(status: int, headers: dict) -> None:
         413: "Too many items for one call, not billed. Split the list.",
         429: "Rate limited, not billed. Back off and retry.",
         500: "Internal error on our side, not billed. Retried; if it persists, report it.",
-        502: "Bad gateway (our proxy got no answer), not billed. Retried with backoff.",
-        503: "Upstream failure, not billed. Safe to retry.",
+        502: "Bad gateway, not billed. Retried with backoff.",
+        503: "Temporary failure on our side, not billed. Safe to retry.",
         504: "Gateway timeout, not billed. Retried; a narrower query often succeeds.",
     }
     if status in messages:
@@ -673,8 +673,8 @@ def cmd_capabilities() -> int:
     Two sources: the x402 discovery document gives prices; /health says how
     many probes THIS caller has left right now, over what window. The
     catalogue no longer states the general allowance (a gateway from before
-    2026-09-21 still does, and is printed if so) -- allowances differ by
-    caller, and a shared allowance reports yes/no rather than a figure.
+    2026-09-21 still does, and is printed if so) -- the figure that counts
+    is the caller's own, and some answers report yes/no rather than a figure.
     Neither request spends a probe.
     """
     try:
@@ -705,12 +705,11 @@ def cmd_capabilities() -> int:
     if "free_calls_remaining" in health:
         hours = health.get("window_hours", window)
         print(f"  free probes remaining for this caller: {health['free_calls_remaining']} "
-              f"(counted per {health.get('counted_per', 'ip')}"
-              + (f", {hours}h window)" if hours is not None else ")"))
+              + (f"({hours}h window)" if hours is not None else ""))
     elif "free_calls_available" in health:
         print(f"  free probes available for this caller: "
               f"{'yes' if health['free_calls_available'] else 'no'} "
-              "(a shared allowance; the exact count is not reported)")
+              "(the exact count is not reported)")
     else:
         print(f"  free probes remaining: unknown ({health.get('error', 'no figure in /health')}); "
               "every data answer reports free_calls_remaining for this caller")
