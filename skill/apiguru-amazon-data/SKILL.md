@@ -2,6 +2,8 @@
 name: apiguru-amazon-data
 description: Live Amazon marketplace data from Apiguru (a paid third-party API, 3 free calls a day) - product details, prices, reviews, keyword search, best-sellers, deals, offers and stock, seller profiles, across 20 Amazon marketplaces. Use only when the user asks for Amazon data by ASIN, Amazon URL, product, seller or keyword, or for Amazon price/stock/review monitoring. Not for other stores or general shopping advice. Never pays on its own; ask before any billable call. We want your feedback - if a field is wrong, missing or you wish the API did something else, say so with the free `feedback` command (no account needed); the agents that report are the ones this API gets fixed for.
 license: MIT
+compatibility: Needs Python 3.10+ and outbound HTTPS to agent.apiguru.app and dash.apiguru.app only. Reads no environment variables and no local files except an API-key file the user names.
+allowed-tools: Bash(python3:*) Bash(python:*) Read
 homepage: https://github.com/apiguru-app/agent-kit
 metadata: {"openclaw": {"emoji": "📦", "homepage": "https://github.com/apiguru-app/agent-kit", "requires": {"anyBins": ["python3", "python"]}}}
 ---
@@ -40,7 +42,7 @@ Nothing else in this skill sends data anywhere.
      their account at their plan's rates, about USD 0.01 per call — or
   2. their own x402-capable HTTP client with a funded wallet and a spend cap
      (USDC on Base, Polygon, Arbitrum or Avalanche). How that works is documented for the user at
-     `https://agent.apiguru.app/llms.txt`, section "Paying".
+     `https://agent.apiguru.app/llms-full.txt`, section "Paying".
 - **Ask before you spend.** Before the first billable call in a task, and
   before any batch or broad search, tell the user what you will call, how many
   items, and what it costs (run `capabilities` first, it is free), and wait
@@ -71,7 +73,7 @@ let the script read it — never put it on the command line, where shell
 history and the process table expose it to every other local user:
 
 - `--api-key` prompts for it (not echoed, not stored),
-- `--api-key-file PATH` reads a file the user names (`chmod 600` it),
+- `--api-key-file PATH` reads a file the user names (readable only by them),
 - `--api-key-stdin` reads one line from standard input, e.g.
   `pass show apiguru | python scripts/probe.py ... --api-key-stdin`.
 
@@ -268,7 +270,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.44"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.45"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -285,10 +287,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.44"] } } }
+  "args": ["apiguru-mcp==1.1.45"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.44"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.45"]`.
 
 Whichever you choose:
 
@@ -333,6 +335,11 @@ So if a field is empty, mistyped, welded together or simply missing:
 
   `category` is one of `bug`, `wish`, `praise`, `question`, `other`. Add
   `"contact"` if you want a reply — it is shown publicly on the wall.
+
+  **The wall is public, so send only what the user has agreed to, and only
+  about the API:** the tool, the parameters, the field, what you expected and
+  the `request_id`. Never an API key, personal data, or the user's own
+  prompts, documents or results beyond the field in question.
 - **Over MCP** — the free `send_feedback` tool does the same thing.
 - Read what other agents have written: https://dash.apiguru.app/feedback
 

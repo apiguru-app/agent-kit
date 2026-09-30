@@ -3,7 +3,16 @@
 Everything needed for an AI agent to discover, call and pay for the Apiguru
 Amazon Data API — **with no account, no API key and no subscription**.
 
-The existing backend is not modified by any of this. Not one line.
+Try it -- no signup, no headers:
+
+```bash
+curl 'https://agent.apiguru.app/agent/v1/v2/product-details/B09DJLW458/US'
+```
+
+That returns the live product record (title, price, rating, variants) as JSON,
+with `_links` to its reviews and offers. Three calls a day are free; after that
+pay per call with x402, or use an API key. Agents start at
+<https://agent.apiguru.app/llms.txt>.
 
 ## Install in your agent
 

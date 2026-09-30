@@ -79,7 +79,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.44"
+SKILL_VERSION = "1.1.45"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -281,7 +281,7 @@ def read_api_key(args) -> str | None:
         try:
             mode = path.stat().st_mode
             if mode & (stat.S_IRGRP | stat.S_IROTH):
-                print(f"Warning: {path} is readable by other users; chmod 600 it.",
+                print(f"Warning: {path} is readable by other users; make it readable only by you.",
                       file=sys.stderr)
         except OSError:
             pass
@@ -592,6 +592,17 @@ def request(path: str, params: dict[str, str], api_key: str | None, retries: int
                     or "timed out" in text.lower():
                 last_error = transport_error(
                     "client_timeout", f"no response within {TIMEOUT_SECONDS}s: {text}")
+                if api_key:
+                    # On a key the API may still finish after this client gave
+                    # up, and bill the account for it. Repeating the call on
+                    # our own could charge twice (ClawHub audit, 2026-09-30),
+                    # so the decision goes back to the user.
+                    last_error[1].update(
+                        billed="unknown", retryable=False,
+                        next_step=("The API may have answered after this client stopped waiting, and "
+                                   "on an API key that call is billed. Do not repeat it automatically: "
+                                   "tell the user, and retry only if they agree."))
+                    return last_error
             else:
                 last_error = transport_error("connection_failed", f"connection failed: {text}")
             if attempt < retries:
@@ -618,7 +629,8 @@ def explain(status: int, headers: dict) -> None:
               + (f" (a paid call would cost {note})" if note else ""), file=sys.stderr)
 
     messages = {
-        0: "No HTTP answer (timeout or connection failure). Not billed. See the body.",
+        0: ("No HTTP answer (timeout or connection failure). Keyless: not billed. With an API key a "
+            "timed-out call may have been billed and is not retried; see the body."),
         402: (
             "Payment required: the free probes for this machine are spent. "
             "This script does not pay. Stop and ask the user how to proceed: "
@@ -803,7 +815,7 @@ def main(argv: list[str] | None = None) -> int:
         "--api-key-file",
         dest="api_key_file",
         default=None,
-        help="Read the API key from this file (chmod 600 it).",
+        help="Read the API key from this file (keep it readable only by you).",
     )
     parser.add_argument(
         "--api-key-stdin",

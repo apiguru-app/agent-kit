@@ -44,20 +44,25 @@ Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unle
 Concretely (the same set `scripts/probe.py` retries):
 
 ```python
-RETRYABLE = {429, 500, 502, 503, 504}   # plus your own client timeout
+RETRYABLE = {429, 500, 502, 503, 504}   # answered, and not billed
 for attempt in range(4):
     try:
         status, body = call(..., timeout=60)
     except TimeoutError:
-        status, body = 0, None      # never answered, never billed
+        if api_key:                  # may have finished and billed after we gave up:
+            raise                    # stop, tell the user, retry only if they agree
+        status, body = 0, None       # keyless and unpaid: never billed
     if (status in RETRYABLE or status == 0) and (body or {}).get('retryable') is not False:
-        time.sleep(2 ** attempt)   # transient, not billed
+        time.sleep(2 ** attempt)
         continue
-    break                          # 200/400/402/404/413 are final
+    break                            # 200/400/402/404/413 are final
 ```
 
 A body's `retryable` flag wins over the status table: a 5xx whose
 cause is permanent says `retryable: false` and is not worth repeating.
+A timeout is different: on an API key (or with an x402 payment attached)
+the request may still complete after your client gave up, so it is never
+retried automatically -- `scripts/probe.py` reports it and stops.
 
 ## Free probes
 

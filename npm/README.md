@@ -75,14 +75,15 @@ Apiguru account.
 ## Paying for calls
 
 Without a key you get 3 free calls per 24 hours per machine. After that a tool
-call returns a structured error carrying an HTTP 402 payment challenge (x402,
-USDC on Base, Polygon, Arbitrum or Avalanche). Either:
+call returns an x402 PaymentRequired result (USDC on Base, Polygon, Arbitrum or
+Avalanche). Either:
 
 - set `APIGURU_API_KEY` from https://dash.apiguru.app so calls bill your
   account at your plan's rates, or
-- have an x402-capable HTTP client pay the challenge against the REST gateway
-  at `https://agent.apiguru.app/agent/v1/...` directly. The full guide is in
-  `https://agent.apiguru.app/llms.txt`.
+- let an x402-capable MCP client pay it in-band: it resends the same tool call
+  with the payment in `_meta["x402/payment"]`. An x402 HTTP client can also pay
+  the REST gateway at `https://agent.apiguru.app/agent/v1/...` directly. The
+  full guide is in `https://agent.apiguru.app/llms-full.txt`.
 
 ## Options
 

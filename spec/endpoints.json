@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.44",
+    "version": "1.1.45",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -40,6 +40,7 @@
     "free_endpoints": [
       "/health",
       "/llms.txt",
+      "/llms-full.txt",
       "/.well-known/x402",
       "/.well-known/agent-card.json",
       "/robots.txt"
@@ -505,7 +506,7 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.",
+      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help).",
       "mcp_params": {
         "compact": {
           "type": "boolean",
@@ -623,7 +624,7 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler.",
+      "notes": "Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included.",
       "item_pattern": "^[A-Z0-9]{10}$"
     },
     {

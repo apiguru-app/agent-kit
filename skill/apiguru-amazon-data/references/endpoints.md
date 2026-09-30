@@ -100,7 +100,7 @@ Use to enrich a list of ASINs in one call; compare the ASINs in `results` with t
 | `asins` | string | yes | Comma-separated ASIN list, maximum 20 after de-duplication. Each must be 10 uppercase alphanumeric characters. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
 
-> Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.
+> Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help).
 
 ## `GET /stock`
 
@@ -116,7 +116,7 @@ Use to compare sellers' current offers and see who holds the buy box, and, with 
 | `offers_count` | string | no | 'all' for every offer (default), 'winner' for the buy-box offer only, or a specific alphanumeric Offer ID. Every offer carries is_buybox_winner; with 'winner' the per-ASIN data holds that one offer and offers_total says how many exist. An ASIN with no featured offer answers an empty list with an explanatory error. The response echoes filters_applied. Default `all`. |
 | `condition` | string | no | Comma-separated condition filter: ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD, USED_ACCEPTABLE (case-insensitive). Omit for every offer. An unknown value is a free 400 listing the allowed ones; it used to be silently treated as ALL. |
 
-> Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler.
+> Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included.
 
 ## `GET /v2/best-sellers`
 

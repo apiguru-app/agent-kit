@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.44
+  version: 1.1.45
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 20 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -578,7 +578,8 @@ paths:
         **Notes:** Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs
         returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings
         they can describe the product family rather than the exact variant. A null field means Amazon
-        did not show it.'
+        did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned
+        (billed, like a not-found product_details call; retrying will not help).'
       tags:
       - Amazon Data
       parameters:
@@ -669,7 +670,9 @@ paths:
         **Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner
         returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to
         scope only the inventory check and return every offer. /scrape is a legacy alias for the same
-        handler.'
+        handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page:
+        the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon
+        says exist) and a note; other sellers'' offers and stock are then not included.'
       tags:
       - Amazon Data
       parameters:
@@ -799,7 +802,9 @@ paths:
         **Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner
         returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to
         scope only the inventory check and return every offer. /scrape is a legacy alias for the same
-        handler.'
+        handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page:
+        the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon
+        says exist) and a note; other sellers'' offers and stock are then not included.'
       tags:
       - Amazon Data
       parameters:

@@ -246,12 +246,116 @@ def _example_urls(spec):
     return urls
 
 
+def _price_range(spec):
+    """(cheapest single call, most one call can cost) in USD, from the spec."""
+    singles = [float(ep["price_usd"]) for ep in spec["endpoints"] if ep["price_model"] != "per_item"]
+    batches = [float(ep["unit_price_usd"]) * ep["max_items"] for ep in spec["endpoints"]
+               if ep["price_model"] == "per_item"]
+    return min(singles), max(singles + batches)
+
+
+def _usd(value):
+    return f"${value:.4f}".rstrip("0").rstrip(".") if value < 0.01 else f"${value:.2f}"
+
+
 def build_llms_txt(spec):
+    """The entry document: what this answers, working calls, the ways in, the
+    rules that cost money, and where the full guide is.
+
+    Until 2026-09-30 llms.txt WAS the full guide -- 24 KB, 245 lines, most of
+    it troubleshooting for fetchers that drop query strings -- and an agent
+    deciding whether to use us read all of it first (external review). The
+    full text is llms-full.txt, linked here. The working-URL list stays in
+    this file on purpose: some fetchers only follow URLs they have already
+    seen as plain text.
+    """
+    api = spec["api"]
+    conventions = spec["conventions"]
+    free = api["free_tier"]
+    agent_auth = api["auth"]["agent"]
+    root = api["agent_base_url"].rsplit("/agent/v1", 1)[0]
+    cheapest, dearest = _price_range(spec)
+    lines = [
+        f"# {api['name']}",
+        "",
+        f"> {api['description']}",
+        "",
+        f"Callable by AI agents with **no account, no API key and no subscription**: "
+        f"**{free['probes_per_client']} free calls** per client per {free['window_hours']}h, then pay per call "
+        f"({_usd(cheapest)} and up) in {agent_auth['asset']} over x402 -- or use an Apiguru account.",
+        "",
+        "## Try it",
+        "",
+        "```bash",
+        f"curl '{api['agent_base_url']}/v2/product-details/{conventions['sample_asin']}/US'",
+        "```",
+        "",
+        "No headers, no signup. Put the required value in the path (several agent fetchers drop "
+        "query strings); an Amazon product URL works in place of an ASIN. Every answer is JSON "
+        "and starts with `_links` to the next useful call.",
+        "",
+        "## Working URLs you can fetch right now",
+        "",
+    ] + [
+        f"- {api['agent_base_url']}{ex}"
+        for ex in _example_urls(spec)
+    ] + [
+        "",
+        "## What each call answers",
+        "",
+    ]
+    for ep in spec["endpoints"]:
+        lines.append(f"- `{ep['path']}` ({ep['name']}): {ep['summary']}. {price_label(ep)}.")
+    lines += [
+        "",
+        "## Ways in",
+        "",
+        f"- **MCP** (Claude, ChatGPT, Cursor, Codex, ...): `{api['mcp_url']}`, keyless. When the free calls "
+        "run out a tool returns an x402 PaymentRequired result that an x402-capable MCP client pays in-band "
+        f"(`_meta[\"x402/payment\"]`). To bill an Apiguru account instead, connect `{api['mcp_account_url']}` "
+        "and sign in.",
+        "- **HTTP, no account**: the URLs above. After the free calls, a 402 carries an x402 challenge "
+        "(`PAYMENT-REQUIRED` header) that any x402 client pays and retries.",
+        "- **HTTP, with an API key**: the same URLs with the header `X-API-KEY` (never in the query string).",
+        f"- **Machine-readable**: OpenAPI {api['openapi_url']}; prices and schemas, free: `{root}/.well-known/x402`.",
+        "",
+        # Kept here, not only in the full guide: skill and MCP catalogues
+        # audit what an agent is told about money, keys and data leaving the
+        # machine (ClawHub SkillSpector, 2026-09-04 and 2026-09-30).
+        "## Cost, keys and consent",
+        "",
+        "- Calls cost money after the free ones. Do not pay, or use a user's API key, without the user's "
+        f"consent; agree a budget and set a spend cap in your x402 client. One call costs at most {_usd(dearest)}.",
+        "- An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user.",
+        "- Every error is JSON with `http_status`, `billed`, `retryable` and `next_step`; retry only when "
+        "`retryable` is true. A 404 (not on that marketplace) is billed; 400s and 5xx are not; a 402 means "
+        "pay, send a key, or sign in.",
+        "- A timeout on an API key or with a payment attached may still have been billed: do not repeat it "
+        "automatically, ask first. Answers are fetched live from Amazon; allow 60 s.",
+        "- Prefer the batch endpoints over loops: cheaper per item.",
+        "- Only `agent.apiguru.app`, `mcp.apiguru.app` and `dash.apiguru.app` are involved; none of them "
+        "redirects elsewhere.",
+        "",
+        "## More",
+        "",
+        f"- Full guide: {root}/llms-full.txt -- paying step by step in Python and TypeScript, clients that lose "
+        "query strings or only follow seen URLs, reading large answers, what Amazon's own data gets wrong, "
+        "every error code.",
+        "- Found something wrong? `POST https://dash.apiguru.app/api/v1/feedback` with "
+        "`{\"message\": \"...\"}` -- free, no key -- or https://github.com/apiguru-app/agent-kit/issues. "
+        "The wall is public: send only what the user agreed to, never keys or personal data.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def build_llms_full_txt(spec):
     api = spec["api"]
     conventions = spec["conventions"]
     free = api["free_tier"]
     agent_auth = api["auth"]["agent"]
     geos = ", ".join(spec["geos"].keys())
+    cheapest, dearest = _price_range(spec)
 
     lines = [
         f"# {api['name']}",
@@ -434,8 +538,8 @@ def build_llms_txt(spec):
         "You need two things: an x402 client library, and an EVM wallet key whose "
         f"address holds a little **{agent_auth['asset']}** on "
         f"**{agent_auth['network']}**. Nothing else: no account here, no ETH for "
-        "gas (the facilitator submits the transfer), no minimum deposit. One call "
-        "costs about a cent; `X-Price-Next-Call` on every response is the exact "
+        "gas (the facilitator submits the transfer), no minimum deposit. A call "
+        f"costs from {_usd(cheapest)}; `X-Price-Next-Call` on every response is the exact "
         "figure.",
         "",
         "How a paid call works: your first request gets `402` with a "
@@ -481,7 +585,7 @@ def build_llms_txt(spec):
         "```",
         "",
         "Keep the spend control: it caps what one 402 can take from the wallet. "
-        "Batch endpoints bill per item (up to 20 items, so up to $0.16 in one "
+        f"Batch endpoints bill per item (so up to {_usd(dearest)} in one "
         "call); check `X-Price-Next-Call` or `/.well-known/x402` before raising "
         "the cap.",
         "",
@@ -713,6 +817,11 @@ def build_llms_txt(spec):
             f"- **Over MCP:** the free `{fb['mcp_tool']}` tool does the same thing.",
             f"- **Read what others wrote:** {fb['wall_read']}",
             "",
+            "The wall is public. Send only what the user has agreed to, and only "
+            "about the API: the tool, the parameters, the field, what you expected "
+            "and the `request_id` -- never an API key, personal data, or the user's "
+            "own prompts or documents.",
+            "",
         ]
     else:
         lines += [
@@ -834,20 +943,25 @@ def build_errors_md(spec):
         "Concretely (the same set `scripts/probe.py` retries):",
         "",
         "```python",
-        "RETRYABLE = {429, 500, 502, 503, 504}   # plus your own client timeout",
+        "RETRYABLE = {429, 500, 502, 503, 504}   # answered, and not billed",
         "for attempt in range(4):",
         "    try:",
         "        status, body = call(..., timeout=60)",
         "    except TimeoutError:",
-        "        status, body = 0, None      # never answered, never billed",
+        "        if api_key:                  # may have finished and billed after we gave up:",
+        "            raise                    # stop, tell the user, retry only if they agree",
+        "        status, body = 0, None       # keyless and unpaid: never billed",
         "    if (status in RETRYABLE or status == 0) and (body or {}).get('retryable') is not False:",
-        "        time.sleep(2 ** attempt)   # transient, not billed",
+        "        time.sleep(2 ** attempt)",
         "        continue",
-        "    break                          # 200/400/402/404/413 are final",
+        "    break                            # 200/400/402/404/413 are final",
         "```",
         "",
         "A body's `retryable` flag wins over the status table: a 5xx whose",
         "cause is permanent says `retryable: false` and is not worth repeating.",
+        "A timeout is different: on an API key (or with an x402 payment attached)",
+        "the request may still complete after your client gave up, so it is never",
+        "retried automatically -- `scripts/probe.py` reports it and stops.",
         "",
         "## Free probes",
         "",
@@ -1027,6 +1141,7 @@ def main():
         encoding="utf-8",
     )
     (SPEC_DIR / "llms.txt").write_text(build_llms_txt(spec), encoding="utf-8")
+    (SPEC_DIR / "llms-full.txt").write_text(build_llms_full_txt(spec), encoding="utf-8")
 
     # Ship a copy inside the MCP package so `pip install apiguru-mcp` is
     # self-contained. Written from here rather than copied by hand so the
@@ -1048,13 +1163,15 @@ def main():
     gateway_llms = SPEC_DIR.parent / "gateway" / "llms.txt"
     if gateway_llms.parent.exists():
         gateway_llms.write_text(build_llms_txt(spec), encoding="utf-8")
-        print(f"synced llms.txt into {gateway_llms}")
+        (gateway_llms.parent / "llms-full.txt").write_text(build_llms_full_txt(spec), encoding="utf-8")
+        print(f"synced llms.txt + llms-full.txt into {gateway_llms.parent}")
 
     # The apex site (apiguru.app) is a separate Cloudflare Pages deploy, so
     # its copies live in the landing source and ship on the next Pages build.
     landing = SPEC_DIR.parent.parent / "docker-setup" / "frontend" / "landing-apiguru"
     if landing.exists():
         (landing / "llms.txt").write_text(build_llms_txt(spec), encoding="utf-8")
+        (landing / "llms-full.txt").write_text(build_llms_full_txt(spec), encoding="utf-8")
         (landing / "openapi.json").write_text(
             json.dumps(openapi, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
@@ -1088,7 +1205,7 @@ def main():
 
     n_paths = len(openapi["paths"])
     print(f"endpoints.json -> {len(spec['endpoints'])} endpoints, {n_paths} paths")
-    print("wrote openapi.json, openapi.yaml, llms.txt")
+    print("wrote openapi.json, openapi.yaml, llms.txt, llms-full.txt")
 
 
 if __name__ == "__main__":
