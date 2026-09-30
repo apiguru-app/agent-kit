@@ -207,15 +207,18 @@ Pick (Amazon renamed that slot to "Overall Pick"); `is_amazon_choice` and
 - **`503`** — a temporary Apiguru-side failure. **Not billed.** Retry with
   backoff. `500`, `502` and `504` are the same class: not billed, retry.
 - **`429`** — rate limited. Back off, then retry.
-- **no answer** (your client timed out) — nothing was billed for a request we
-  never answered; retry. Some marketplaces answer more slowly; allow 60s.
+- **no answer** (your client timed out) — keyless, nothing was billed; retry.
+  **With an API key the call may still have finished and been billed**, so it
+  is not repeated automatically: tell the user and retry only if they agree.
+  Some marketplaces answer more slowly; allow 60s before giving up.
 - **`400`** — your input was wrong (bad ASIN format, unknown geo, missing
   required parameter). Not billed. Fix the input; do not retry unchanged.
 - **`402`** — free probes spent. **Stop and ask the user** (see "Costs and
   consent"). Do not retry, do not look for a key, do not attempt payment.
 
-So: **retry `429`, `500`, `502`, `503`, `504` and timeouts (unless the body
-says `retryable: false`); never retry `400`, `402`, `404` or `413`.**
+So: **retry `429`, `500`, `502`, `503`, `504` and keyless timeouts (unless the
+body says `retryable: false`); never retry `400`, `402`, `404` or `413`, and
+never repeat a timed-out keyed call without the user's say-so.**
 `scripts/probe.py` does exactly this. Its exit status tells a job what
 happened: `0` usable answer, `1` HTTP error or a body reporting failure,
 `2` input rejected before any request, `3` a batch with some failed rows.
@@ -270,7 +273,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.45"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.46"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -287,10 +290,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.45"] } } }
+  "args": ["apiguru-mcp==1.1.46"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.45"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.46"]`.
 
 Whichever you choose:
 
@@ -300,7 +303,7 @@ Whichever you choose:
   in the official MCP Registry as `app.apiguru/amazon-data`. Anything under
   another name or publisher is not ours.
 - **Verify the artifact, not just the name and version.** PyPI and npm publish
-  a SHA-256 for every file; `pip download apiguru-mcp==1.1.4` then
+  a SHA-256 for every file; `pip download apiguru-mcp==<version>` then
   `pip hash` gives you a digest to record and re-check on the next upgrade.
 - **Before raising the pin**, read the changelog at
   https://github.com/apiguru-app/agent-kit/releases and diff the dependency
@@ -312,8 +315,9 @@ Whichever you choose:
   (`mcp/apiguru`, Docker's MCP catalogue).
 
 The MCP tools do the same thing as `probe.py` and follow the same rules — they
-never pay, and a 402 comes back as a structured error for the user to decide
-on. Their advantage is that they validate ASINs and geos before spending a
+never pay on their own. A 402 comes back as an x402 PaymentRequired result: the
+user decides, and only an x402-capable MCP client they set up (with a spend cap)
+can pay it. Their advantage is that they validate ASINs and geos before spending a
 probe.
 
 ## Telling us what is broken
