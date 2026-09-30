@@ -121,7 +121,8 @@ Some errors cost money and some do not:
 - **429** — rate limit. Back off and retry.
 - **413** — too many items in a batch (20 ASINs for `product_details_batch`,
   10 for `offers_stock` and `seller_profile_batch`). Not billed; split the list.
-- **400** — bad input (ASINs must be 10 **uppercase** alphanumeric chars).
+- **400** — bad input (an ASIN is 10 letters and digits; an Amazon product URL
+  works in its place, and lower case is fine).
   Not billed.
 
 ## Configuration

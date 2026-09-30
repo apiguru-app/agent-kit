@@ -35,6 +35,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from . import __version__
 from . import client as client_module
+from . import identifiers
 from .client import (
     ApiguruError,
     GITHUB_ISSUES,
@@ -103,7 +104,9 @@ Choosing a tool:
                                       seller_profile_batch
 
 Rules that will save you money and failed calls:
-- ASINs must be 10 UPPERCASE alphanumeric characters. Normalise before calling.
+- Pass an ASIN (10 characters) or an Amazon product URL; lower case is
+  fine. A URL's domain sets the marketplace unless `geo` says otherwise;
+  what was rewritten is listed under `_input_interpreted`.
 - Prefer the batch tools over looping single-item tools.
 - product_details and product_details_batch return a COMPACT record by
   default and list what they left out under `_omitted_fields`. Ask for more
@@ -191,6 +194,12 @@ def _merged_input_schema(ep: dict[str, Any]) -> dict[str, Any]:
     extra = _mcp_only_params(ep)
     if extra:
         schema.setdefault("properties", {}).update(extra)
+    # ASIN parameters also take an Amazon URL or a lower-case ASIN; the
+    # tool normalises them (identifiers.py) and validates the result.
+    props = schema.get("properties", {})
+    for name in identifiers.ASIN_PARAMS:
+        if name in props:
+            props[name] = identifiers.relaxed_schema(name, props[name])
     return schema
 
 
@@ -264,11 +273,14 @@ def _make_impl(ep: dict[str, Any]):
         if payment is not None:
             outcome["payment"] = "presented"
         try:
+            interpreted = identifiers.normalise(arguments, load_spec()["geos"])
             fetched = await fetch_endpoint(path, arguments, payment=payment)
             payload = fetched.payload
             outcome["ok"] = True
             outcome["cached"] = isinstance(payload, dict) and bool(payload.get("_cache"))
             shaped = _shape(ep, payload, local)
+            if interpreted and isinstance(shaped, dict):
+                shaped["_input_interpreted"] = interpreted
             if fetched.payment_response is None:
                 return shaped
             outcome["payment"] = "settled"

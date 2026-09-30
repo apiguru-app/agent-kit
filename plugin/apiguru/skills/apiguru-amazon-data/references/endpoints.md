@@ -36,7 +36,7 @@ Pass as `geo`, chosen from the user's request or the Amazon domain they mention 
 
 ## `GET /v2/product-details`
 
-Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.
+Use for one product's current listing. Not for several ASINs (product_details_batch), seller offers or stock (offers_stock), or review text (product_reviews). Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.
 
 **Price:** $0.003 per call
 
@@ -49,7 +49,7 @@ Fetches the complete product record for one ASIN on one marketplace: title, pric
 
 ## `GET /v2/product-reviews`
 
-Returns the review block for one ASIN: overall star rating, total rating count, Amazon's 'customers say' AI summary, and the individual review list.
+Use for what customers say about one product. Not for its full review history or star-filtered reviews (not available), or for seller feedback (seller_reviews). Returns the review block for one ASIN: overall star rating, total rating count, Amazon's 'customers say' AI summary, and the individual review list.
 
 **Price:** $0.003 per call
 
@@ -62,7 +62,7 @@ Returns the review block for one ASIN: overall star rating, total rating count, 
 
 ## `GET /search`
 
-Search Amazon products by keyword. Filters: page, sort_by, category_id (browse node), min_price / max_price (decimals), product_condition (NEW / USED / RENEWED), brand, seller_id, today_deals and deal_type (coupons, all_discounts, buy_more_save_more). Every answer carries filters_applied, filters_ignored (with the reason) and available_filters for that marketplace.
+Use to find products by keyword and filters. Rows are result snippets; for the authoritative record of one ASIN call product_details. Search Amazon products by keyword. Filters: page, sort_by, category_id (browse node), min_price / max_price (decimals), product_condition (NEW / USED / RENEWED), brand, seller_id, today_deals and deal_type (coupons, all_discounts, buy_more_save_more). Every answer carries filters_applied, filters_ignored (with the reason) and available_filters for that marketplace.
 
 **Price:** $0.003 per call
 
@@ -91,7 +91,7 @@ Search Amazon products by keyword. Filters: page, sort_by, category_id (browse n
 
 ## `GET /product`
 
-Batch variant of product_details. Accepts a comma-separated ASIN list, deduplicates it, and fetches all of them concurrently. Far cheaper and faster than N single calls.
+Use to enrich a list of ASINs in one call; compare the ASINs in `results` with the ones you sent. Batch variant of product_details. Accepts a comma-separated ASIN list, deduplicates it, and fetches all of them concurrently. Far cheaper and faster than N single calls.
 
 **Price:** $0.0024 per item (max 20)
 
@@ -104,7 +104,7 @@ Batch variant of product_details. Accepts a comma-separated ASIN list, deduplica
 
 ## `GET /stock`
 
-Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.
+Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.
 
 **Price:** $0.0045 per item (max 10)
 
@@ -120,7 +120,7 @@ Returns the current offer list per ASIN (seller, price, condition, buy-box winne
 
 ## `GET /v2/best-sellers`
 
-Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department), available_categories (that marketplace's departments with slugs) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department ("women's shoes", "mules & clogs"); category.subcategory_path gives the node's full path and category.heading the page's own title line.
+Use for what sells best in a department right now. The rank is Amazon's, not a sales figure. Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department), available_categories (that marketplace's departments with slugs) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department ("women's shoes", "mules & clogs"); category.subcategory_path gives the node's full path and category.heading the page's own title line.
 
 **Price:** $0.003 per call
 
@@ -135,7 +135,7 @@ Best-seller rankings for a department of one marketplace, 50 per page. Every ans
 
 ## `GET /v2/deals`
 
-Returns the current Amazon deals feed: ASIN, title, deal price, list price, discount, deal badge, start/end time and product links. Filter by department (categories), brand id (brands), rating cut-off, price bounds, minimum discount and Prime program. Every answer carries available_filters (the category and brand ids this marketplace accepts, with names), filters_applied / filters_ignored (what took effect) and next_offset (the next page, null when the feed ends).
+Use for items currently promoted in Amazon's deals feed. Not for one product's price (product_details); for a brand by name use search with brand= and today_deals=true. Returns the current Amazon deals feed: ASIN, title, deal price, list price, discount, deal badge, start/end time and product links. Filter by department (categories), brand id (brands), rating cut-off, price bounds, minimum discount and Prime program. Every answer carries available_filters (the category and brand ids this marketplace accepts, with names), filters_applied / filters_ignored (what took effect) and next_offset (the next page, null when the feed ends).
 
 **Price:** $0.003 per call
 
@@ -159,7 +159,7 @@ Returns the current Amazon deals feed: ASIN, title, deal price, list price, disc
 
 ## `GET /seller-profile`
 
-Returns the storefront profile for each seller id: business name, rating, feedback counts, address and marketplace presence.
+Use to vet sellers: name, rating and feedback counts as Amazon displays them. Returns the storefront profile for each seller id: business name, rating, feedback counts, address and marketplace presence.
 
 **Price:** $0.0036 per item (max 10)
 
@@ -172,7 +172,7 @@ Returns the storefront profile for each seller id: business name, rating, feedba
 
 ## `GET /v2/seller-products`
 
-Products listed by a seller: a storefront search. Takes the same filters as search -- query, page, sort_by, category_id, min_price / max_price, product_condition, brand, today_deals, deal_type -- and answers with filters_applied, filters_ignored and available_filters like search does.
+Use to list one seller's storefront. Products listed by a seller: a storefront search. Takes the same filters as search -- query, page, sort_by, category_id, min_price / max_price, product_condition, brand, today_deals, deal_type -- and answers with filters_applied, filters_ignored and available_filters like search does.
 
 **Price:** $0.003 per call
 
@@ -201,7 +201,7 @@ Products listed by a seller: a storefront search. Takes the same filters as sear
 
 ## `GET /v2/seller-reviews`
 
-Returns paginated seller feedback, optionally filtered to a star-rating window.
+Use for a seller's customer feedback (service, shipping). Not for product reviews (product_reviews). Returns paginated seller feedback, optionally filtered to a star-rating window.
 
 **Price:** $0.003 per call
 
@@ -217,6 +217,6 @@ Returns paginated seller feedback, optionally filtered to a star-rating window.
 
 ## Formats
 
-- ASIN: `^[A-Z0-9]{10}$` - Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.
+- ASIN: `^[A-Z0-9]{10}$` - On agent.apiguru.app and the MCP server any case is accepted and upper-cased, and an Amazon product URL (/dp/ASIN, /gp/product/ASIN, ?asin=) works in place of an ASIN; its domain sets geo unless geo names another marketplace (then 400). The answer lists what was rewritten under parameters_interpreted (MCP: _input_interpreted).
 - Seller ID: `^[Aa][A-Za-z0-9]{9,20}$` - An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected with 400 before any fetch.
 - Sample ASIN for testing: `B09DJLW458`

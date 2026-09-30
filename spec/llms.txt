@@ -212,7 +212,7 @@ Measured on the ASIN above: 2,223 bytes against 135,923 for the whole record, a 
 ## Conventions
 
 - **Marketplaces** (20): US, CA, DE, MX, UK, FR, IT, ES, AU, BR, IN, JP, NL, AE, PL, SA, SG, SE, TR, BE. Pass as `geo`, chosen from the user's request or the Amazon domain they mention (amazon.de -> DE). The API assumes `US` only when the parameter is omitted; do not rely on that.
-- **ASIN format**: `^[A-Z0-9]{10}$`. Uppercase only. Lowercase ASINs are rejected with 400 - normalise before calling.
+- **ASIN format**: `^[A-Z0-9]{10}$`. On agent.apiguru.app and the MCP server any case is accepted and upper-cased, and an Amazon product URL (/dp/ASIN, /gp/product/ASIN, ?asin=) works in place of an ASIN; its domain sets geo unless geo names another marketplace (then 400). The answer lists what was rewritten under parameters_interpreted (MCP: _input_interpreted).
 - **Seller ID format**: `^[Aa][A-Za-z0-9]{9,20}$`. An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected with 400 before any fetch.
 - **Sample ASIN for testing**: `B09DJLW458`.
 

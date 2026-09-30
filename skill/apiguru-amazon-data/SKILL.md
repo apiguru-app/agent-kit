@@ -101,8 +101,8 @@ Full parameter reference: `references/endpoints.md`.
 
 ## Rules that prevent wasted calls and wasted money
 
-1. **ASINs must be 10 UPPERCASE alphanumeric characters** (`^[A-Z0-9]{10}$`).
-   Uppercase the input before sending; a lowercase ASIN is a `400`.
+1. **An ASIN is 10 letters and digits** (`^[A-Z0-9]{10}$`). Any case works, and
+   the gateway also reads an Amazon product URL (`/dp/ASIN`) in its place.
 2. **Never loop a single-item endpoint over a list.** Use `/product` for
    ASINs and `/seller-profile` for seller IDs. Ten ASINs through `/product`
    costs USD 0.08 and one round trip; ten through `/v2/product-details` costs
@@ -268,7 +268,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.43"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.44"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -285,10 +285,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.43"] } } }
+  "args": ["apiguru-mcp==1.1.44"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.43"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.44"]`.
 
 Whichever you choose:
 

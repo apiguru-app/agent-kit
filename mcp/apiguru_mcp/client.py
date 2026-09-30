@@ -603,7 +603,8 @@ async def _fetch(
         raise ApiguruError(
             "Bad input: " + detail(),
             http_status=400, billed=False, retryable=False,
-            next_step="Fix the parameters (ASINs are 10 uppercase alphanumerics; geo is one of the 20 codes) and retry.",
+            next_step=("Fix the parameters (an ASIN is 10 letters and digits, or an Amazon product URL; "
+                       "geo is one of the 20 codes) and retry."),
         )
     if status >= 500:
         raise ApiguruError(
