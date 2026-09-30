@@ -9,11 +9,16 @@ small JSON document with the same shape every time:
     {
       "error":       human-readable explanation,
       "http_status": upstream status when there was one,
-      "billed":      whether the failed call cost money,
+      "billed":      whether the failed call cost money: true, false, or
+                     "unknown" when we stopped waiting before the API answered,
       "retryable":   whether retrying unchanged can succeed,
       "next_step":   what to do instead,
-      ...            optional extras (payment_challenge, ...)
+      ...            optional extras
     }
+
+One failure is not raised but returned: a keyless 402 is the x402 MCP
+transport's PaymentRequired result (see PaymentRequiredError), so that an
+x402-capable client can pay it in-band.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ class ApiguruError(ToolError):
         error: str,
         *,
         http_status: int | None = None,
-        billed: bool = False,
+        billed: bool | str = False,
         retryable: bool = False,
         next_step: str | None = None,
         **extra: Any,
@@ -52,6 +57,27 @@ class ApiguruError(ToolError):
     @property
     def http_status(self) -> int | None:
         return self.detail.get("http_status")
+
+
+class PaymentRequiredError(ApiguruError):
+    """A keyless 402, carrying the x402 PaymentRequired document.
+
+    The tool does not let this propagate: it returns `document` as an
+    `isError` result with the same JSON in `structuredContent` and in the
+    first text block, which is where x402 MCP clients look for `x402Version`
+    and `accepts`. Raised as a ToolError, the SDK would prefix the JSON with
+    "Error executing tool ..." and no client could parse it.
+    """
+
+    def __init__(self, document: dict[str, Any]) -> None:
+        self.document = document
+        super().__init__(
+            str(document.get("error") or "Payment required."),
+            http_status=402,
+            billed=False,
+            retryable=False,
+            next_step=document.get("next_step"),
+        )
 
 
 logger = logging.getLogger("apiguru_mcp.errors")

@@ -506,7 +506,9 @@ def build_llms_txt(spec):
         "",
         "## Interfaces",
         "",
-        f"- [MCP server]({api['mcp_url']}): streamable HTTP, keyless; also installable locally (`uvx apiguru-mcp`).",
+        f"- [MCP server]({api['mcp_url']}): streamable HTTP, keyless; also installable locally (`uvx apiguru-mcp`). "
+        "When the free calls run out, a tool returns an x402 PaymentRequired result; an x402-capable MCP client "
+        "pays it in-band by resending the same call with the payment in `_meta[\"x402/payment\"]`.",
         f"- [MCP server, signed in]({api['mcp_account_url']}): OAuth 2.1 for claude.ai, Claude Desktop and ChatGPT connectors; bills your Apiguru account.",
         f"- [OpenAPI spec]({api['openapi_url']}): full machine-readable schema for all {len(spec['endpoints'])} endpoints.",
         f"- [Keyed REST API]({api['base_url']}): for existing customers, `X-API-KEY` header.",

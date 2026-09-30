@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.42
+  version: 1.1.43
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 20 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -27,9 +27,10 @@ info:
     ## Retry policy
 
 
-    Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are billed --
-    unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413: the request
-    itself is the problem and repeating it will not change the answer.
+    Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body
+    says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed;
+    allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the
+    problem and repeating it will not change the answer.
 
     '
   contact:
@@ -182,8 +183,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '402': &id003
-          description: Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge.
-            On the keyed path it means the account balance is exhausted.
+          description: 'Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge
+            (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]).
+            On the keyed path it means the account balance is exhausted.'
           content:
             application/json:
               schema:
@@ -239,8 +241,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         timeout: &id012
-          description: No response before your own client's deadline. Nothing is billed for a request
-            we never answered. Some marketplaces answer more slowly than others; allow 60s.
+          description: No response before your own client's deadline. A keyless call without a payment
+            is never billed. On an API key, or with an x402 payment attached, the request may still complete
+            after your client gave up, and is then billed like any answered call. Some marketplaces answer
+            more slowly than others; allow 60s rather than retrying early.
           content:
             application/json:
               schema:
@@ -892,8 +896,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '402':
-          description: Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge.
-            On the keyed path it means the account balance is exhausted.
+          description: 'Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge
+            (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]).
+            On the keyed path it means the account balance is exhausted.'
           content:
             application/json:
               schema:
@@ -949,8 +954,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         timeout:
-          description: No response before your own client's deadline. Nothing is billed for a request
-            we never answered. Some marketplaces answer more slowly than others; allow 60s.
+          description: No response before your own client's deadline. A keyless call without a payment
+            is never billed. On an API key, or with an x402 payment attached, the request may still complete
+            after your client gave up, and is then billed like any answered call. Some marketplaces answer
+            more slowly than others; allow 60s rather than retrying early.
           content:
             application/json:
               schema:
@@ -1744,8 +1751,9 @@ x-apiguru-conventions:
   error_semantics:
     '400': Bad input (bad ASIN format, unknown geo, missing required param). NOT billed.
     '401': Missing or invalid API key on the keyed path.
-    '402': Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed
-      path it means the account balance is exhausted.
+    '402': 'Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an
+      x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path
+      it means the account balance is exhausted.'
     '403': Account disabled, or no active subscription plan.
     '404': The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and
       the bad input was the caller's. Retrying will not help; try a different geo.
@@ -1756,9 +1764,12 @@ x-apiguru-conventions:
     '503': Temporary failure on our side. NOT billed. Safe and correct to retry.
     '504': 'Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower
       query often succeeds.'
-    timeout: No response before your own client's deadline. Nothing is billed for a request we never answered.
-      Some marketplaces answer more slowly than others; allow 60s.
-  retry_policy: 'Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are
-    billed -- unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413:
-    the request itself is the problem and repeating it will not change the answer.'
+    timeout: No response before your own client's deadline. A keyless call without a payment is never
+      billed. On an API key, or with an x402 payment attached, the request may still complete after your
+      client gave up, and is then billed like any answered call. Some marketplaces answer more slowly
+      than others; allow 60s rather than retrying early.
+  retry_policy: 'Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the
+    error body says `retryable: false`. A client-side timeout on a key or a payment may have completed
+    and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request
+    itself is the problem and repeating it will not change the answer.'
   sample_seller_id: A2A1RNLLUK3HYA

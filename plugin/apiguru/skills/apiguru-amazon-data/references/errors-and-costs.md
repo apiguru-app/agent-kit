@@ -26,7 +26,7 @@ single-item equivalents. Always prefer them for more than one item.
 |---|---|---|
 | `400` | no | Bad input (bad ASIN format, unknown geo, missing required param). NOT billed. |
 | `401` | - | Missing or invalid API key on the keyed path. |
-| `402` | - | Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed path it means the account balance is exhausted. |
+| `402` | - | Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path it means the account balance is exhausted. |
 | `403` | - | Account disabled, or no active subscription plan. |
 | `404` | **yes** | The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo. |
 | `413` | - | Too many items in a batch request. |
@@ -35,11 +35,11 @@ single-item equivalents. Always prefer them for more than one item.
 | `502` | no | Bad gateway. NOT billed. Same class as 503: retry with backoff. |
 | `503` | no | Temporary failure on our side. NOT billed. Safe and correct to retry. |
 | `504` | no | Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds. |
-| `timeout` | - | No response before your own client's deadline. Nothing is billed for a request we never answered. Some marketplaces answer more slowly than others; allow 60s. |
+| `timeout` | - | No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early. |
 
 ## Retry policy
 
-Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are billed -- unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
+Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
 
 Concretely (the same set `scripts/probe.py` retries):
 

@@ -10,8 +10,11 @@ agents use the first version:
   projection is ~4 KB and lists what it left out. `fields=` fetches any of
   it by name; `compact=false` returns everything.
 * **Structured errors.** Every failure is JSON with `http_status`,
-  `billed`, `retryable` and `next_step` (see errors.py). A 402 carries the
-  payment challenge instead of vanishing into "Error executing tool".
+  `billed`, `retryable` and `next_step` (see errors.py).
+* **Payment in-band.** A keyless 402 is the x402 MCP transport's
+  PaymentRequired result; the same call resent with `_meta["x402/payment"]`
+  is paid through the gateway and answers with
+  `_meta["x402/payment-response"]`. A caller never has to leave MCP to pay.
 * **Output schemas.** Each tool advertises a loose `outputSchema` naming
   the top-level keys it returns.
 * **Cache and budget.** Identical calls within a few minutes are served
@@ -26,8 +29,9 @@ import logging
 import time
 from typing import Any, Awaitable, Callable
 
+import pydantic_core
 from mcp.server.mcpserver import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from . import __version__
 from . import client as client_module
@@ -37,12 +41,16 @@ from .client import (
     FEEDBACK_WALL,
     post_feedback,
     access_mode_sync,
-    call_endpoint,
+    fetch_endpoint,
     oauth_client_id,
     oauth_subject,
     resolve_api_key,
 )
-from .errors import structured
+from .errors import PaymentRequiredError, structured
+
+# The x402 MCP transport's keys (x402 transports-v2/mcp).
+PAYMENT_META_KEY = "x402/payment"
+PAYMENT_RESPONSE_META_KEY = "x402/payment-response"
 from .shaping import (
     COMPACT_LIST_FIELDS,
     COMPACT_PRODUCT_FIELDS,
@@ -107,7 +115,13 @@ Rules that will save you money and failed calls:
   ask for one by name only when you must resolve a value to a sibling ASIN.
 - Every error is a JSON document with http_status, billed, retryable and
   next_step. Retry only when retryable is true. A 404 IS billed; a 503 is
-  not. A 402 means pay, add a key, or sign in.
+  not.
+- When the free calls run out, a tool returns an x402 PaymentRequired
+  result (`x402Version`, `accepts`). An x402-capable MCP client pays it and
+  resends the same call with the payment in `_meta["x402/payment"]`; the
+  receipt comes back in `_meta["x402/payment-response"]`. Without a wallet,
+  ask the user to connect https://mcp.apiguru.app/account and sign in, then
+  repeat the same call.
 - Identical calls within a few minutes are answered from a short cache
   (`_cache` marks such answers) and cost nothing extra.
 - Call list_capabilities first if you need prices, the marketplace list or
@@ -197,11 +211,46 @@ def _shape(ep: dict[str, Any], payload: Any, local: dict[str, Any]) -> Any:
     return payload
 
 
+def _payment_from(context: Any) -> Any:
+    """`_meta["x402/payment"]` of the tools/call being served, if any.
+
+    A tool called directly (tests, a nested call) has no request context.
+    """
+    try:
+        params = context.request_context.params
+    except Exception:
+        return None
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    return meta.get(PAYMENT_META_KEY) if isinstance(meta, dict) else None
+
+
+def _payment_required_result(document: dict[str, Any]) -> CallToolResult:
+    """The x402 MCP transport's PaymentRequired: the same JSON as
+    structuredContent and as the first text block."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(document))],
+        structured_content=document,
+        is_error=True,
+    )
+
+
+def _paid_result(shaped: Any, receipt: dict[str, Any], structured_output: bool) -> CallToolResult:
+    """What the SDK would have built from `shaped`, plus the settlement
+    receipt, which only a CallToolResult can carry."""
+    text = pydantic_core.to_json(shaped, fallback=str, indent=2).decode()
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        structured_content=shaped if structured_output and isinstance(shaped, dict) else None,
+        _meta={PAYMENT_RESPONSE_META_KEY: receipt},
+    )
+
+
 def _make_impl(ep: dict[str, Any]):
     path = ep["path"]
     local_names = set(_mcp_only_params(ep))
+    structured_output = output_model_for(ep["name"], ep.get("output_example")) is not None
 
-    async def impl(arguments: dict[str, Any]) -> Any:
+    async def impl(arguments: dict[str, Any], context: Any = None) -> Any:
         local = {k: arguments.pop(k) for k in list(arguments) if k in local_names}
         if ep.get("upstream_limit"):
             # Let the upstream fetch only what will be shown (best-sellers:
@@ -209,13 +258,27 @@ def _make_impl(ep: dict[str, Any]):
             wanted = local.get("limit", DEFAULT_LIST_LIMIT)
             if isinstance(wanted, int) and wanted > 0:
                 arguments["limit"] = wanted
+        payment = _payment_from(context)
         started = time.monotonic()
         outcome: dict[str, Any] = {"tool": ep["name"], "ok": False, "http_status": None, "cached": False}
+        if payment is not None:
+            outcome["payment"] = "presented"
         try:
-            payload = await call_endpoint(path, arguments)
+            fetched = await fetch_endpoint(path, arguments, payment=payment)
+            payload = fetched.payload
             outcome["ok"] = True
             outcome["cached"] = isinstance(payload, dict) and bool(payload.get("_cache"))
-            return _shape(ep, payload, local)
+            shaped = _shape(ep, payload, local)
+            if fetched.payment_response is None:
+                return shaped
+            outcome["payment"] = "settled"
+            return _paid_result(shaped, fetched.payment_response, structured_output)
+        except PaymentRequiredError as exc:
+            outcome["http_status"] = 402
+            outcome["error"] = str(exc.document.get("error", ""))[:200]
+            if payment is not None:
+                outcome["payment"] = "refused"
+            return _payment_required_result(exc.document)
         except ApiguruError as exc:
             outcome["http_status"] = exc.http_status
             outcome["error"] = exc.detail.get("error", "")[:200]
@@ -237,7 +300,8 @@ def _log_usage(outcome: dict[str, Any]) -> None:
     event = {
         **outcome,
         "route": client_module.request_route.get(),
-        "auth_mode": access_mode_sync(),
+        # A call paid in-band is its own mode: it is revenue, not a free call.
+        "auth_mode": "x402" if outcome.get("payment") == "settled" else access_mode_sync(),
         "subject": oauth_subject(),
         "oauth_client_id": oauth_client_id(),
         "user_agent": (client_module.request_user_agent.get() or "")[:160],
@@ -336,8 +400,9 @@ def _add_capabilities_tool(server: MCPServer) -> None:
             access_mode = "keyed (X-API-KEY present; billed to that account)"
         else:
             access_mode = (
-                "keyless (free probe budget, then HTTP 402 payment "
-                "challenge payable via x402, USDC on Base, Polygon, Arbitrum or Avalanche)"
+                "keyless (free probe budget, then an x402 PaymentRequired result, payable "
+                "in-band over MCP via _meta[\"x402/payment\"] in USDC on Base, Polygon, "
+                "Arbitrum or Avalanche)"
             )
         budget = client_module.session_budget_usd()
         return json.dumps(
@@ -363,8 +428,17 @@ def _add_capabilities_tool(server: MCPServer) -> None:
                 "retry_policy": conv["retry_policy"],
                 "error_semantics": conv["error_semantics"],
                 "error_format": {
-                    "error": "text", "http_status": "int|null", "billed": "bool",
-                    "retryable": "bool", "next_step": "text", "payment_challenge": "on 402, keyless",
+                    "error": "text", "http_status": "int|null",
+                    "billed": "bool, or \"unknown\" when the fetch outlived the tool call",
+                    "retryable": "bool", "next_step": "text",
+                },
+                "payment_in_band": {
+                    "on_402": "an isError result whose structuredContent is an x402 PaymentRequired "
+                              "(x402Version, accepts, resource)",
+                    "pay_with": "resend the same tools/call with the PaymentPayload in "
+                                "params._meta[\"x402/payment\"]",
+                    "receipt": "result _meta[\"x402/payment-response\"]",
+                    "without_a_wallet": client_module.OAUTH_URL,
                 },
                 "compact_product_fields": list(COMPACT_PRODUCT_FIELDS),
                 "compact_list_fields": list(COMPACT_LIST_FIELDS),

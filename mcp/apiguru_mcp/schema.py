@@ -11,7 +11,13 @@ from __future__ import annotations
 import inspect
 from typing import Annotated, Any, Callable, Literal, Optional
 
+from mcp.server.mcpserver import Context
 from pydantic import Field
+
+# The SDK hands the request context to a parameter annotated `Context` and
+# leaves that parameter out of the input schema. Named so it cannot collide
+# with an endpoint parameter.
+CONTEXT_PARAM = "mcp_request_context"
 
 _PRIMITIVES: dict[str, type] = {
     "string": str,
@@ -96,14 +102,18 @@ def typed_function(
 ) -> Callable[..., Any]:
     """Build an async function with `input_schema`'s signature.
 
-    `impl` receives the validated arguments as a single dict. When
-    `return_model` is given it becomes the return annotation, which is what
-    the SDK derives the tool's `outputSchema` from.
+    `impl` receives the validated arguments as a single dict, and the
+    request's context (None when the tool is called directly, as tests do).
+    When `return_model` is given it becomes the return annotation, which is
+    what the SDK derives the tool's `outputSchema` from.
     """
     params = build_parameters(input_schema)
+    params.append(inspect.Parameter(CONTEXT_PARAM, inspect.Parameter.KEYWORD_ONLY,
+                                    default=None, annotation=Context))
 
     async def handler(**kwargs: Any) -> Any:
-        return await impl(kwargs)
+        context = kwargs.pop(CONTEXT_PARAM, None)
+        return await impl(kwargs, context)
 
     handler.__name__ = name
     handler.__doc__ = doc

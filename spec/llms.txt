@@ -146,7 +146,7 @@ Use these to plan a job at zero cost before committing to a paid call:
 
 ## Interfaces
 
-- [MCP server](https://mcp.apiguru.app/mcp): streamable HTTP, keyless; also installable locally (`uvx apiguru-mcp`).
+- [MCP server](https://mcp.apiguru.app/mcp): streamable HTTP, keyless; also installable locally (`uvx apiguru-mcp`). When the free calls run out, a tool returns an x402 PaymentRequired result; an x402-capable MCP client pays it in-band by resending the same call with the payment in `_meta["x402/payment"]`.
 - [MCP server, signed in](https://mcp.apiguru.app/account): OAuth 2.1 for claude.ai, Claude Desktop and ChatGPT connectors; bills your Apiguru account.
 - [OpenAPI spec](https://dash.apiguru.app/openapi.json): full machine-readable schema for all 10 endpoints.
 - [Keyed REST API](https://dash.apiguru.app/api/v1): for existing customers, `X-API-KEY` header.
@@ -222,7 +222,7 @@ These matter for cost control — some errors bill and some do not:
 
 - **400** — Bad input (bad ASIN format, unknown geo, missing required param). NOT billed.
 - **401** — Missing or invalid API key on the keyed path.
-- **402** — Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge. On the keyed path it means the account balance is exhausted.
+- **402** — Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path it means the account balance is exhausted.
 - **403** — Account disabled, or no active subscription plan.
 - **404** — The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo.
 - **413** — Too many items in a batch request.
@@ -231,9 +231,9 @@ These matter for cost control — some errors bill and some do not:
 - **502** — Bad gateway. NOT billed. Same class as 503: retry with backoff.
 - **503** — Temporary failure on our side. NOT billed. Safe and correct to retry.
 - **504** — Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.
-- **timeout** — No response before your own client's deadline. Nothing is billed for a request we never answered. Some marketplaces answer more slowly than others; allow 60s.
+- **timeout** — No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.
 
-**Retry policy:** Retry 429, 500, 502, 503, 504 and client-side timeouts with backoff -- none of them are billed -- unless the error body says `retryable: false`. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
+**Retry policy:** Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
 
 ## Telling us what is broken
 

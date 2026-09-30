@@ -7,9 +7,18 @@ search, best-sellers, deals, live offers and stock, and seller profiles across
 <!-- mcp-name: app.apiguru/amazon-data -->
 
 **No API key required.** Unkeyed callers get a small free probe budget, then an
-HTTP 402 payment challenge payable autonomously via x402 (USDC on Base,
-Polygon, Arbitrum or Avalanche). Bring an API key if you already have one and calls bill to your
-account instead.
+x402 payment challenge payable in USDC on Base, Polygon, Arbitrum or Avalanche.
+Bring an API key if you already have one and calls bill to your account instead.
+
+**Paying without leaving MCP.** The challenge comes back as the
+[x402 MCP transport](https://docs.cdp.coinbase.com/x402/seller/mcp-payments)'s
+PaymentRequired tool result (`isError`, with `x402Version` and `accepts` in
+`structuredContent`). An x402-capable MCP client pays it by resending the same
+tool call with the payment in `_meta["x402/payment"]`, and gets the settlement
+receipt in the result's `_meta["x402/payment-response"]`. Nothing is settled
+unless the call is answered. An agent without a wallet can ask its user to
+connect `https://mcp.apiguru.app/account` and sign in; the same call then
+bills their account.
 
 ## Install
 
@@ -22,7 +31,7 @@ uvx apiguru-mcp
 ```
 
 No Python or uv on the machine? `npx -y apiguru-mcp` (Node 18+) runs a stdio
-bridge to the hosted server with the same 11 tools; see `../npm/README.md`.
+bridge to the hosted server with the same 12 tools; see `../npm/README.md`.
 
 ### Claude Code
 

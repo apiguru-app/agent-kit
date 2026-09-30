@@ -10,6 +10,12 @@ Three routes to the same data, decided per call:
   to the normal API and bill the owning account.
 * **Keyless** — no key anywhere. Calls go to the agent gateway, which serves
   a small free probe budget and then answers 402 with a payment challenge.
+  The tool returns that challenge as the x402 MCP transport's
+  PaymentRequired result; a client that pays it resends the same call with
+  the payment in `_meta["x402/payment"]`, which is passed to the gateway as
+  its PAYMENT-SIGNATURE header. The gateway verifies, serves and settles
+  exactly as for an HTTP payer; its receipt comes back as the result's
+  `_meta["x402/payment-response"]`.
 
 When this server is the HOSTED one (mcp.apiguru.app) it sits in the same
 Docker network as the gateway and the backend. It then calls both directly
@@ -24,21 +30,31 @@ Two guards live here as well:
   same question within a few minutes does not pay twice;
 * an optional per-process spend ceiling (`APIGURU_SESSION_BUDGET_USD`) for
   local installs, so a runaway loop stops at a number the operator chose.
+
+A fetch outlives the tool call that started it. When a call has waited
+`APIGURU_MCP_TOOL_WAIT_SECONDS` the tool answers "still running", and the
+fetch goes on; its answer lands in the cache, and an identical call made
+meanwhile attaches to it instead of starting another. That is what makes
+retrying after a slow call safe on a key, where the backend bills whatever
+it finishes -- the old answer here said "nothing was charged for a
+timeout", which the client could not know.
 """
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import hashlib
 import json
 import os
 import time
 from contextvars import ContextVar
 from decimal import Decimal
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, NamedTuple
 
 import httpx
 
-from .errors import ApiguruError, exception_text
+from .errors import ApiguruError, PaymentRequiredError, exception_text
 from .spec import api_info, endpoints
 
 # Set by the ASGI middleware in http_app.py for the duration of one request.
@@ -58,10 +74,19 @@ request_user_agent: ContextVar[str | None] = ContextVar("request_user_agent", de
 oauth_key_resolver: Callable[[str], Awaitable[str | None]] | None = None
 
 USER_AGENT = "apiguru-mcp/1.1 (+https://apiguru.app)"
-TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
+# Longer than the tool waits (tool_wait_seconds), so a slow fetch can still
+# land in the cache after its tool call has answered "still running".
+TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 
 INTERNAL_TOKEN_HEADER = "X-Apiguru-Internal-Token"
 INTERNAL_CLIENT_HEADER = "X-Apiguru-Client-IP"
+
+# x402 v2 header names, as the gateway reads and writes them.
+PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
+PAYMENT_RESPONSE_HEADERS = ("PAYMENT-RESPONSE", "X-PAYMENT-RESPONSE")
+
+# Tests route calls into an in-process app; None means real HTTP.
+transport: httpx.AsyncBaseTransport | None = None
 
 DASH = "https://dash.apiguru.app"
 OAUTH_URL = "https://mcp.apiguru.app/account"
@@ -291,12 +316,97 @@ def cache_clear() -> None:
 # the call
 # --------------------------------------------------------------------------
 
-def _payment_challenge(response: httpx.Response) -> str | None:
-    return (
-        response.headers.get("PAYMENT-REQUIRED")
-        or response.headers.get("payment-required")
-        or response.headers.get("WWW-Authenticate")
-    )
+def tool_wait_seconds() -> float:
+    """How long one tool call waits for its fetch before answering that it
+    is still running. The fetch itself may run to TIMEOUT.read."""
+    try:
+        return float(os.environ.get("APIGURU_MCP_TOOL_WAIT_SECONDS", "100"))
+    except ValueError:
+        return 100.0
+
+
+class Fetched(NamedTuple):
+    """One answer, and the settlement receipt when the call was paid in-band."""
+    payload: Any
+    payment_response: dict[str, Any] | None = None
+
+
+# Fetches in flight, by cache key. A call identical to one still running
+# waits on it instead of fetching (and paying) again.
+_inflight: dict[str, asyncio.Task] = {}
+
+
+def _decode_b64_json(value: str | None) -> Any:
+    if not value:
+        return None
+    try:
+        return json.loads(base64.b64decode(value + "=" * (-len(value) % 4)))
+    except Exception:
+        return None
+
+
+def _payment_header(payment: Any) -> str:
+    """`_meta["x402/payment"]` as the gateway's PAYMENT-SIGNATURE value.
+
+    The transport sends the PaymentPayload as an object; a JSON string is
+    accepted too, and anything else is taken to be the header value already.
+    """
+    if isinstance(payment, str):
+        text = payment.strip()
+        if not text.startswith("{"):
+            return text
+        payment = json.loads(text)
+    raw = json.dumps(payment, separators=(",", ":")).encode()
+    return base64.b64encode(raw).decode()
+
+
+def _x402_document(response: httpx.Response, payload: Any) -> dict[str, Any] | None:
+    """The PaymentRequired document of a gateway 402, from its body or,
+    failing that, its PAYMENT-REQUIRED header. None when there is none (a
+    deployment with the x402 rail off)."""
+    for candidate in (payload, _decode_b64_json(response.headers.get("PAYMENT-REQUIRED"))):
+        if (isinstance(candidate, dict) and candidate.get("x402Version")
+                and isinstance(candidate.get("accepts"), list) and candidate["accepts"]):
+            return dict(candidate)
+    return None
+
+
+def _payment_required(document: dict[str, Any], *, paying: bool,
+                      free_left: str | None) -> PaymentRequiredError:
+    """The gateway's challenge, reworded for a caller that only has tools.
+
+    The gateway's text tells an HTTP client to pay and retry the URL; here
+    the way on is the same tool call. The Bazaar declaration is dropped: it
+    is several KB of schema the caller does not need, and the gateway puts
+    it back into the payment before settling.
+    """
+    doc = {k: v for k, v in document.items() if k not in ("extensions", "docs")}
+    price = document.get("price_next_call")
+    if paying:
+        doc["error"] = str(document.get("message") or document.get("error") or "The payment was not accepted.")
+        doc["next_step"] = (
+            "Nothing was charged. Sign a fresh payment for one of `accepts` and resend this "
+            "same tool call with it in params._meta[\"x402/payment\"]; a signed payment pays "
+            f"for one call only. Without a wallet, ask the user to connect {OAUTH_URL} and sign in."
+        )
+    else:
+        doc["error"] = (
+            "Payment required: the free calls for this caller are spent"
+            + (f"; this call costs {price}." if price else ".")
+        )
+        doc["next_step"] = (
+            "The request itself was valid. Continue in one of three ways, then repeat this same "
+            "tool call with the same arguments: (1) an x402-capable MCP client pays one of "
+            "`accepts` (USDC) and resends the call with the payment in "
+            f"params._meta[\"x402/payment\"]; (2) without a wallet, ask the user to connect {OAUTH_URL} "
+            "and sign in -- same tools, billed to their Apiguru account; (3) send an Apiguru API key "
+            f"from {DASH} (the X-API-KEY header on this MCP connection, or APIGURU_API_KEY for a "
+            "local install)."
+        )
+        if free_left is not None:
+            doc["free_probes_remaining"] = free_left
+    doc.update(http_status=402, billed=False, retryable=False, sign_in_url=OAUTH_URL)
+    return PaymentRequiredError(doc)
 
 
 async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = True) -> Any:
@@ -305,11 +415,21 @@ async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = 
     Every failure is an ApiguruError whose message is a JSON document the
     model can act on (see errors.py).
     """
-    global session_spent_usd
+    return (await fetch_endpoint(path, params, use_cache=use_cache)).payload
 
+
+async def fetch_endpoint(
+    path: str, params: dict[str, Any], *, use_cache: bool = True, payment: Any = None
+) -> Fetched:
+    """call_endpoint, plus an x402 payment to present and its receipt.
+
+    `payment` is the caller's `_meta["x402/payment"]`. It is ignored on a
+    keyed or signed-in call: the account pays, and forwarding a wallet
+    payment as well would charge twice.
+    """
     api_key = await resolve_api_key()
-    keyed = bool(api_key)
-    url = f"{_base_url(keyed=keyed)}{path}"
+    if api_key:
+        payment = None
     encoded = _encode(params)
 
     identity = (
@@ -322,12 +442,56 @@ async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = 
         if hit is not None:
             payload, age = hit
             if isinstance(payload, dict):
-                return {**payload, "_cache": {"hit": True, "age_seconds": int(age), "ttl_seconds": int(cache_ttl_seconds())}}
-            return payload
+                payload = {**payload, "_cache": {"hit": True, "age_seconds": int(age), "ttl_seconds": int(cache_ttl_seconds())}}
+            return Fetched(payload)
 
-    estimate = estimate_cost_usd(path, params)
-    _check_budget(estimate)
+    task = _inflight.get(key)
+    if task is None:
+        estimate = estimate_cost_usd(path, params)
+        _check_budget(estimate)
+        task = asyncio.create_task(_fetch(path, encoded, api_key, payment, estimate, key if use_cache else None))
+        _inflight[key] = task
+        task.add_done_callback(lambda done: _landed(key, done))
 
+    wait = tool_wait_seconds()
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=wait)
+    except asyncio.TimeoutError:
+        on_account = bool(api_key or payment)
+        raise ApiguruError(
+            f"{path} has not answered within {wait:.0f}s; the live fetch is still running.",
+            billed="unknown" if on_account else False,
+            retryable=True,
+            next_step=(
+                "Repeat the identical call (same tool, same arguments) in a minute: it attaches "
+                "to this fetch and returns its answer instead of starting another"
+                + (", so it is charged at most once." if on_account else ".")
+            ),
+            fetch_status="still_running",
+        ) from None
+
+
+def _landed(key: str, task: asyncio.Task) -> None:
+    if _inflight.get(key) is task:
+        _inflight.pop(key, None)
+    if not task.cancelled():
+        # Retrieved here so a failure nobody waited for is not reported as
+        # "Task exception was never retrieved".
+        task.exception()
+
+
+async def _fetch(
+    path: str,
+    encoded: dict[str, str],
+    api_key: str | None,
+    payment: Any,
+    estimate: Decimal,
+    cache_key: str | None,
+) -> Fetched:
+    global session_spent_usd
+
+    keyed = bool(api_key)
+    url = f"{_base_url(keyed=keyed)}{path}"
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     client_ip = request_client_ip.get()
     if api_key:
@@ -341,16 +505,33 @@ async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = 
             headers[INTERNAL_TOKEN_HEADER] = internal[1]
             if client_ip:
                 headers[INTERNAL_CLIENT_HEADER] = client_ip
+        if payment is not None:
+            try:
+                headers[PAYMENT_SIGNATURE_HEADER] = _payment_header(payment)
+            except (TypeError, ValueError) as exc:
+                raise ApiguruError(
+                    "The payment in _meta[\"x402/payment\"] is not a PaymentPayload object.",
+                    http_status=400, billed=False, retryable=False,
+                    next_step="Send the x402 PaymentPayload as a JSON object, as the x402 MCP transport specifies.",
+                ) from exc
 
-    async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True, transport=transport) as client:
         try:
             response = await client.get(url, params=encoded, headers=headers)
         except httpx.TimeoutException as exc:
+            if keyed or payment is not None:
+                raise ApiguruError(
+                    f"Request to {path} got no answer within {TIMEOUT.read:.0f}s. This endpoint fetches "
+                    "live data from Amazon and can be slow under load.",
+                    billed="unknown", retryable=True,
+                    next_step=("It may still have completed and been charged; retrying fetches again. "
+                               f"Check recent usage at {DASH} before retrying anything costly."),
+                ) from exc
             raise ApiguruError(
-                f"Request to {path} timed out after {TIMEOUT.read:.0f}s. This endpoint fetches "
+                f"Request to {path} got no answer within {TIMEOUT.read:.0f}s. This endpoint fetches "
                 "live data from Amazon and can be slow under load.",
                 billed=False, retryable=True,
-                next_step="Retry; nothing was charged for a timeout.",
+                next_step="Retry; a keyless call without a payment is never charged.",
             ) from exc
         except httpx.HTTPError as exc:
             raise ApiguruError(
@@ -377,16 +558,16 @@ async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = 
                 http_status=402, billed=False, retryable=False,
                 next_step=f"Top up at {DASH}, or sign in with a funded account.",
             )
+        document = _x402_document(response, payload)
+        if document is not None:
+            raise _payment_required(document, paying=payment is not None,
+                                    free_left=response.headers.get("X-Free-Probes-Remaining"))
         raise ApiguruError(
             "Payment required: the free probe budget for this caller is spent. " + detail(),
             http_status=402, billed=False, retryable=False,
             next_step=(
-                "Either pay this request with an x402-capable HTTP client (USDC on Base, Polygon, Arbitrum or Avalanche) using the "
-                f"payment_challenge below, set APIGURU_API_KEY from {DASH}, or connect the OAuth "
-                f"endpoint {OAUTH_URL} and sign in."
+                f"Set APIGURU_API_KEY from {DASH}, or connect the OAuth endpoint {OAUTH_URL} and sign in."
             ),
-            payment_challenge=_payment_challenge(response),
-            free_probes_remaining=response.headers.get("X-Free-Probes-Remaining"),
         )
     if status == 401:
         raise ApiguruError(
@@ -441,10 +622,18 @@ async def call_endpoint(path: str, params: dict[str, Any], *, use_cache: bool = 
             http_status=status, billed=False, retryable=True, next_step="Retry once.",
         )
 
+    receipt = None
+    if payment is not None:
+        for name in PAYMENT_RESPONSE_HEADERS:
+            receipt = _decode_b64_json(response.headers.get(name))
+            if isinstance(receipt, dict):
+                break
+            receipt = None
+
     session_spent_usd += estimate
-    if use_cache:
-        _cache_put(key, payload)
-    return payload
+    if cache_key is not None:
+        _cache_put(cache_key, payload)
+    return Fetched(payload, receipt)
 
 
 # --- feedback --------------------------------------------------------------

@@ -1,7 +1,7 @@
 {
   "name": "apiguru",
   "description": "Live Amazon marketplace data across 20 countries - product details, prices, reviews, search, best-sellers, deals, live offers and stock, and seller profiles. Bundles the Apiguru skill and MCP server. Works with no API key.",
-  "version": "1.1.42",
+  "version": "1.1.43",
   "author": {
     "name": "Apiguru",
     "email": "support@apiguru.app",

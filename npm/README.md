@@ -2,8 +2,8 @@
 
 Live Amazon marketplace data for AI agents as MCP tools: product details,
 reviews, keyword search, best-sellers, deals, live offers and stock, and seller
-profiles across 20 country marketplaces. Eleven read-only tools with prices and
-retry rules in their descriptions.
+profiles across 20 country marketplaces. 12 tools: ten data tools with prices and
+retry rules in their descriptions, a free catalogue tool and a free feedback tool.
 
 ```bash
 npx -y apiguru-mcp
