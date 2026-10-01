@@ -358,7 +358,13 @@ def create_app(streamable_http_path: str = "/mcp", host: str = "127.0.0.1"):
         login_url=f"{issuer}{LOGIN_PATH}",
         access_ttl=int(os.environ.get("APIGURU_OAUTH_ACCESS_TTL", str(24 * 3600))),
         refresh_ttl=int(os.environ.get("APIGURU_OAUTH_REFRESH_TTL", str(30 * 24 * 3600))),
+        server_url=issuer,
     )
+    # The provider checks each token's audience itself (any path on this
+    # origin: tokens work on /mcp and /account alike), so the SDK's
+    # exact-URL check stays off; saying so explicitly also silences its
+    # warning. Older SDKs lack the field.
+    audience = {"validate_token_resource": False} if "validate_token_resource" in AuthSettings.model_fields else {}
 
     account_server = build_server(
         auth_server_provider=provider,
@@ -374,6 +380,7 @@ def create_app(streamable_http_path: str = "/mcp", host: str = "127.0.0.1"):
             ),
             revocation_options=RevocationOptions(enabled=True),
             required_scopes=None,
+            **audience,
         ),
     )
     account_app = account_server.streamable_http_app(

@@ -183,13 +183,22 @@ class Store:
         await self._engine.dispose()
 
     async def sweep(self) -> None:
-        """Drop expired codes and tokens that are more than a week past expiry."""
+        """Drop expired codes and tokens that are more than a week past expiry,
+        and registrations older than 90 days that hold no code or token (a
+        client that comes back simply registers again)."""
         cutoff = utcnow() - timedelta(days=7)
         async with self._sessions() as session:
             async with session.begin():
                 await session.execute(delete(OAuthCode).where(OAuthCode.expires_at < cutoff))
                 await session.execute(delete(OAuthTokenRow).where(OAuthTokenRow.expires_at < cutoff))
                 await session.execute(delete(McpRequest).where(McpRequest.ts < utcnow() - timedelta(days=90)))
+                await session.execute(
+                    delete(OAuthClient).where(
+                        OAuthClient.created_at < utcnow() - timedelta(days=90),
+                        OAuthClient.client_id.not_in(select(OAuthTokenRow.client_id)),
+                        OAuthClient.client_id.not_in(select(OAuthCode.client_id)),
+                    )
+                )
 
     # -- usage telemetry --------------------------------------------------
 
@@ -350,6 +359,23 @@ class Store:
                 scopes=row.scopes.split() if row.scopes else [],
                 resource=row.resource, expires_at=as_utc(row.expires_at), revoked=bool(row.revoked),
             )
+
+    async def consume_refresh(self, token_hash: str) -> bool:
+        """Revoke one refresh token, True only for the caller that flipped it.
+        A conditional UPDATE, like consume_code: concurrent rotations of the
+        same token cannot both succeed."""
+        async with self._sessions() as session:
+            async with session.begin():
+                result = await session.execute(
+                    update(OAuthTokenRow)
+                    .where(
+                        OAuthTokenRow.token_hash == token_hash,
+                        OAuthTokenRow.kind == "refresh",
+                        OAuthTokenRow.revoked.is_(False),
+                    )
+                    .values(revoked=True)
+                )
+                return (result.rowcount or 0) == 1
 
     async def revoke_pair(self, pair_id: str) -> None:
         async with self._sessions() as session:

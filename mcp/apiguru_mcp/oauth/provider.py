@@ -20,6 +20,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from mcp.server.auth.provider import (
     AccessToken,
@@ -27,6 +28,7 @@ from mcp.server.auth.provider import (
     AuthorizationParams,
     AuthorizeError,
     OAuthAuthorizationServerProvider,
+    RegistrationError,
     RefreshToken,
     TokenError,
     construct_redirect_uri,
@@ -34,6 +36,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
 from .store import Store, new_token, utcnow
+from .policy import RedirectPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +44,22 @@ logger = logging.getLogger(__name__)
 CODE_TTL_SECONDS = 300
 # A login page that sits open longer than this is abandoned.
 PENDING_TTL_SECONDS = 600
+# Pending logins live in memory; past this many the oldest are dropped, so a
+# flood of /authorize requests cannot grow the process without bound.
+PENDING_MAX = 5000
 
 DEFAULT_SCOPE = "apiguru"
+
+
+def _origin(url: str) -> tuple[str, str, int | None] | None:
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    return parts.scheme, parts.hostname.lower(), port or (443 if parts.scheme == "https" else 80)
 
 
 @dataclass
@@ -54,6 +71,9 @@ class PendingLogin:
     client_name: str
     params: AuthorizationParams
     created: float
+    # Hash of the cookie of the browser that first opened the login page;
+    # only that browser can complete it.
+    browser: str | None = None
 
 
 class ApiguruOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]):
@@ -64,11 +84,17 @@ class ApiguruOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, R
         login_url: str,
         access_ttl: int,
         refresh_ttl: int,
+        redirect_policy: RedirectPolicy | None = None,
+        server_url: str | None = None,
     ) -> None:
         self.store = store
         self.login_url = login_url.rstrip("/")
         self.access_ttl = access_ttl
         self.refresh_ttl = refresh_ttl
+        self.redirect_policy = redirect_policy if redirect_policy is not None else RedirectPolicy.from_environment()
+        # Tokens are audience-bound to this origin (RFC 8707). Both /mcp and
+        # /account are served here, so any path on it is this server.
+        self.server_origin = _origin(server_url or login_url)
         # In memory on purpose: a pending login is worthless after a
         # restart, and the user simply clicks "connect" again.
         self._pending: dict[str, PendingLogin] = {}
@@ -79,21 +105,52 @@ class ApiguruOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, R
         document = await self.store.load_client(client_id)
         if document is None:
             return None
-        return OAuthClientInformationFull.model_validate_json(document)
+        client = OAuthClientInformationFull.model_validate_json(document)
+        # Apply policy to registrations created before this control existed too.
+        return self.redirect_policy.restrict(client)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        requested = [str(u) for u in (client_info.redirect_uris or [])]
+        approved = self.redirect_policy.approved(client_info.redirect_uris)
+        if not approved:
+            logger.warning("Refused OAuth registration (%s): no approved redirect_uris in %s",
+                           client_info.client_name, requested)
+            raise RegistrationError(
+                error="invalid_redirect_uri",
+                error_description="Redirect URI is not approved for this server. Contact support to add a client.",
+            )
+        # The SDK answers with this same object, so the client is told which
+        # of its callbacks were kept (RFC 7591 section 3.2.1).
+        client_info.redirect_uris = approved
         await self.store.save_client(client_info.client_id, client_info.model_dump_json())
         logger.info(
-            "Registered OAuth client %s (%s) redirect_uris=%s",
+            "Registered OAuth client %s (%s) redirect_uris=%s%s",
             client_info.client_id,
             client_info.client_name,
-            [str(u) for u in (client_info.redirect_uris or [])],
+            [str(u) for u in approved],
+            f" dropped={[u for u in requested if u not in {str(a) for a in approved}]}"
+            if len(approved) < len(requested) else "",
         )
+
+    def for_this_server(self, resource: str | None) -> bool:
+        """A token's audience is this server. No resource at all is accepted:
+        RFC 8707 is optional for clients, and such a token is ours anyway."""
+        if resource is None:
+            return True
+        return self.server_origin is not None and _origin(resource) == self.server_origin
 
     # -- authorization ------------------------------------------------------
 
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
+        if not self.redirect_policy.allows(str(params.redirect_uri)):
+            raise AuthorizeError(error="invalid_request", error_description="Redirect URI is not approved.")
+        if not self.for_this_server(params.resource):
+            logger.warning("Refused /authorize for client %s: resource %r is not this server",
+                           client.client_id, params.resource)
+            raise AuthorizeError(error="invalid_target", error_description="Tokens here are only for this server.")
         self._expire_pending()
+        while len(self._pending) >= PENDING_MAX:
+            del self._pending[next(iter(self._pending))]
         txn = secrets.token_urlsafe(24)
         self._pending[txn] = PendingLogin(
             txn=txn,
@@ -199,11 +256,16 @@ class ApiguruOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, R
         stored = await self.store.load_token(refresh_token.token, "refresh")
         if stored is None or stored.revoked:
             raise TokenError(error="invalid_grant", error_description="Refresh token is no longer valid.")
-        # Rotate: the old pair dies with this exchange (RFC 6819 §5.2.2.3).
-        await self.store.revoke_pair(stored.pair_id)
         granted = scopes or stored.scopes
         if any(s not in stored.scopes for s in granted):
             raise TokenError(error="invalid_scope", error_description="Cannot widen scopes on refresh.")
+        # Rotate: the old pair dies with this exchange (RFC 6819 §5.2.2.3).
+        # Claiming the refresh token is one conditional UPDATE, so of two
+        # concurrent exchanges exactly one wins and mints the next pair.
+        if not await self.store.consume_refresh(stored.token_hash):
+            logger.warning("Refresh token for client %s presented twice; second exchange refused", client.client_id)
+            raise TokenError(error="invalid_grant", error_description="Refresh token is no longer valid.")
+        await self.store.revoke_pair(stored.pair_id)
         return await self._issue(
             client_id=client.client_id,
             subject=stored.subject,
@@ -216,6 +278,11 @@ class ApiguruOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, R
     async def load_access_token(self, token: str) -> AccessToken | None:
         stored = await self.store.load_token(token, "access")
         if stored is None or stored.revoked or stored.expires_at < utcnow():
+            return None
+        if not self.for_this_server(stored.resource):
+            logger.warning("Refused access token for client %s: issued for %r", stored.client_id, stored.resource)
+            return None
+        if await self.get_client(stored.client_id) is None:
             return None
         return AccessToken(
             token=token,
