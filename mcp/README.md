@@ -2,7 +2,7 @@
 
 Live Amazon marketplace data for AI agents — product details, reviews, keyword
 search, best-sellers, deals, live offers and stock, and seller profiles across
-20 country marketplaces.
+23 country marketplaces.
 
 <!-- mcp-name: app.apiguru/amazon-data -->
 

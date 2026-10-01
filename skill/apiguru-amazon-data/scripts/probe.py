@@ -79,7 +79,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.47"
+SKILL_VERSION = "1.1.48"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -116,7 +116,7 @@ FAILED_ITEM_STATUSES = {"not_found", "unavailable", "error", "failed"}
 # --- BEGIN GENERATED RULES (spec/generate.py, from spec/endpoints.json) ---
 # Do not edit by hand: the block is rewritten on every release so the local
 # check can never disagree with what the API publishes.
-GEOS = ['US', 'CA', 'DE', 'MX', 'UK', 'FR', 'IT', 'ES', 'AU', 'BR', 'IN', 'JP', 'NL', 'AE', 'PL', 'SA', 'SG', 'SE', 'TR', 'BE']
+GEOS = ['US', 'CA', 'DE', 'MX', 'UK', 'FR', 'IT', 'ES', 'AU', 'BR', 'IN', 'JP', 'NL', 'AE', 'PL', 'SA', 'SG', 'SE', 'TR', 'BE', 'IE', 'ZA', 'EG']
 RULES = {
     '/v2/product-details': {
         'required': ['asin'],

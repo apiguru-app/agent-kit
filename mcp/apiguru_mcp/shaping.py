@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, create_model
 # Fields kept by the compact projection of a product record, in this order.
 COMPACT_PRODUCT_FIELDS: tuple[str, ...] = (
     "asin", "parent_asin", "product_title", "brand_name",
-    "product_price", "product_original_price", "product_price_max", "currency",
+    "product_price", "product_original_price", "product_price_max", "prime_price", "currency",
     "price_snapshot", "product_star_rating", "product_num_ratings", "product_num_offers",
     "product_availability", "in_stock", "condition", "pre_order", "sales_volume",
     "delivery_info", "buybox_winner", "offer", "badges",

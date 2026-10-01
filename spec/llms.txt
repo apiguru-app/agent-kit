@@ -1,6 +1,6 @@
 # Apiguru Amazon Data API
 
-> Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 20 country marketplaces.
+> Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 23 country marketplaces.
 
 Callable by AI agents with **no account, no API key and no subscription**: **3 free calls** per client per 24h, then pay per call ($0.003 and up) in USDC (native USDC on each network; on Base 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) over x402 -- or use an Apiguru account.
 

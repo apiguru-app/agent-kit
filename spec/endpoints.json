@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.47",
+    "version": "1.1.48",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -10,7 +10,7 @@
     "mcp_account_note": "OAuth 2.1 (PKCE, dynamic client registration). For clients that cannot send headers: claude.ai, Claude Desktop and ChatGPT connectors. The user signs in with their Apiguru dashboard credentials or API key; calls bill that account.",
     "docs_url": "https://github.com/apiguru-app/agent-kit#readme",
     "contact": "support@apiguru.app",
-    "description": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 20 country marketplaces.",
+    "description": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 23 country marketplaces.",
     "auth": {
       "human": {
         "type": "apiKey",
@@ -74,7 +74,10 @@
     "SG": "sg",
     "SE": "se",
     "TR": "com.tr",
-    "BE": "com.be"
+    "BE": "com.be",
+    "IE": "ie",
+    "ZA": "co.za",
+    "EG": "eg"
   },
   "conventions": {
     "asin_pattern": "^[A-Z0-9]{10}$",
@@ -108,7 +111,7 @@
       "method": "GET",
       "summary": "Full product detail for a single ASIN",
       "description": "Use for one product's current listing. Not for several ASINs (product_details_batch), seller offers or stock (offers_stock), or review text (product_reviews). Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.",
-      "bazaar_description": "Real-time Amazon product data for any ASIN: title, current price, star rating, review count, images, feature bullets, variations and category. Covers 20 country marketplaces including US, UK, DE, JP, IN and BR. Returns live data fetched at request time, not a cache.",
+      "bazaar_description": "Real-time Amazon product data for any ASIN: title, current price, star rating, review count, images, feature bullets, variations and category. Covers 23 country marketplaces including US, UK, DE, JP, IN and BR. Returns live data fetched at request time, not a cache.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -141,7 +144,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -183,7 +189,7 @@
       "method": "GET",
       "summary": "Customer reviews for a single ASIN",
       "description": "Use for what customers say about one product. Not for its full review history or star-filtered reviews (not available), or for seller feedback (seller_reviews). Returns the review block for one ASIN: overall star rating, total rating count, Amazon's 'customers say' AI summary, and the individual review list.",
-      "bazaar_description": "Amazon customer reviews for any ASIN: overall star rating, total rating count, the 'customers say' AI summary, and individual review text with per-review ratings. Useful for sentiment analysis, product research and competitive monitoring across 20 marketplaces.",
+      "bazaar_description": "Amazon customer reviews for any ASIN: overall star rating, total rating count, the 'customers say' AI summary, and individual review text with per-review ratings. Useful for sentiment analysis, product research and competitive monitoring across 23 marketplaces.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -216,7 +222,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -256,7 +265,7 @@
       "method": "GET",
       "summary": "Search Amazon products by keyword",
       "description": "Use to find products by keyword and filters. Rows are result snippets; for the authoritative record of one ASIN call product_details. Search Amazon products by keyword. Filters: page, sort_by, category_id (browse node), min_price / max_price (decimals), product_condition (NEW / USED / RENEWED), brand, seller_id, today_deals and deal_type (coupons, all_discounts, buy_more_save_more). Every answer carries filters_applied, filters_ignored (with the reason) and available_filters for that marketplace.",
-      "bazaar_description": "Search Amazon by keyword and get back structured product results: ASIN, title, price, rating and image for each hit. Supports pagination, six sort orders, and filters for category, price range, brand, seller and product condition. Works across 20 country marketplaces.",
+      "bazaar_description": "Search Amazon by keyword and get back structured product results: ASIN, title, price, rating and image for each hit. Supports pagination, six sort orders, and filters for category, price range, brand, seller and product condition. Works across 23 country marketplaces.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -295,7 +304,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -444,7 +456,7 @@
       "method": "GET",
       "summary": "Product detail for up to 20 ASINs in one call",
       "description": "Use to enrich a list of ASINs in one call; compare the ASINs in `results` with the ones you sent. Batch variant of product_details. Accepts a comma-separated ASIN list, deduplicates it, and fetches all of them concurrently. Far cheaper and faster than N single calls.",
-      "bazaar_description": "Fetch Amazon product data for up to 20 ASINs in a single request: title, price, rating, review count and images for each. Deduplicates the input list and fetches concurrently, so bulk catalogue enrichment costs one round trip instead of twenty. Covers 20 country marketplaces.",
+      "bazaar_description": "Fetch Amazon product data for up to 20 ASINs in a single request: title, price, rating, review count and images for each. Deduplicates the input list and fetches concurrently, so bulk catalogue enrichment costs one round trip instead of twenty. Covers 23 country marketplaces.",
       "price_model": "per_item",
       "unit_price_usd": "0.0024",
       "count_param": "asins",
@@ -482,7 +494,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -530,7 +545,7 @@
       "method": "GET",
       "summary": "Live offers and inventory for up to 10 ASINs",
       "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.",
-      "bazaar_description": "Live Amazon offer and inventory data for up to 10 ASINs: every active offer with seller, price, shipping and condition, which one holds the buy box, and optionally the real purchasable stock quantity. Built for repricing, buy-box monitoring and stock-out alerting across 20 marketplaces.",
+      "bazaar_description": "Live Amazon offer and inventory data for up to 10 ASINs: every active offer with seller, price, shipping and condition, which one holds the buy box, and optionally the real purchasable stock quantity. Built for repricing, buy-box monitoring and stock-out alerting across 23 marketplaces.",
       "price_model": "per_item",
       "unit_price_usd": "0.0045",
       "count_param": "asins",
@@ -568,7 +583,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -635,7 +653,7 @@
       "upstream_limit": true,
       "summary": "Best-seller rankings for a category",
       "description": "Use for what sells best in a department right now. The rank is Amazon's, not a sales figure. Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department), available_categories (that marketplace's departments with slugs) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department (\"women's shoes\", \"mules & clogs\"); category.subcategory_path gives the node's full path and category.heading the page's own title line.",
-      "bazaar_description": "Current Amazon best-seller rankings for any category or subcategory, with rank, ASIN, title, price and rating for each entry. Paginated and available across 20 country marketplaces. Useful for trend detection, category research and product sourcing.",
+      "bazaar_description": "Current Amazon best-seller rankings for any category or subcategory, with rank, ASIN, title, price and rating for each entry. Paginated and available across 23 country marketplaces. Useful for trend detection, category research and product sourcing.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -679,7 +697,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -771,7 +792,7 @@
       "method": "GET",
       "summary": "Current Amazon deals with filters",
       "description": "Use for items currently promoted in Amazon's deals feed. Not for one product's price (product_details); for a brand by name use search with brand= and today_deals=true. Returns the current Amazon deals feed: ASIN, title, deal price, list price, discount, deal badge, start/end time and product links. Filter by department (categories), brand id (brands), rating cut-off, price bounds, minimum discount and Prime program. Every answer carries available_filters (the category and brand ids this marketplace accepts, with names), filters_applied / filters_ignored (what took effect) and next_offset (the next page, null when the feed ends).",
-      "bazaar_description": "Live Amazon deals feed with current discounts: ASIN, title, deal price, original price, discount percentage, deal badge and end time. Filter by department, brand id, 4-star rating cut-off, min/max price, minimum discount or Prime program; each answer lists the category and brand ids it accepts and where the next page starts. 20 marketplaces. Built for deal aggregation and price-drop alerting.",
+      "bazaar_description": "Live Amazon deals feed with current discounts: ASIN, title, deal price, original price, discount percentage, deal badge and end time. Filter by department, brand id, 4-star rating cut-off, min/max price, minimum discount or Prime program; each answer lists the category and brand ids it accepts and where the next page starts. 23 marketplaces. Built for deal aggregation and price-drop alerting.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -799,7 +820,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -996,7 +1020,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -1052,7 +1079,7 @@
       "method": "GET",
       "summary": "Products listed by a seller",
       "description": "Use to list one seller's storefront. Products listed by a seller: a storefront search. Takes the same filters as search -- query, page, sort_by, category_id, min_price / max_price, product_condition, brand, today_deals, deal_type -- and answers with filters_applied, filters_ignored and available_filters like search does.",
-      "bazaar_description": "List every product in an Amazon seller's storefront: ASIN, title, price, rating and image, paginated. Built for competitor catalogue monitoring, supplier assortment analysis and brand-protection sweeps across 20 marketplaces.",
+      "bazaar_description": "List every product in an Amazon seller's storefront: ASIN, title, price, rating and image, paginated. Built for competitor catalogue monitoring, supplier assortment analysis and brand-protection sweeps across 23 marketplaces.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -1095,7 +1122,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."
@@ -1194,7 +1224,7 @@
       "method": "GET",
       "summary": "Feedback reviews for a seller",
       "description": "Use for a seller's customer feedback (service, shipping). Not for product reviews (product_reviews). Returns paginated seller feedback, optionally filtered to a star-rating window.",
-      "bazaar_description": "Amazon seller feedback reviews with rating, date and review text, paginated and filterable to a star-rating window. Built for supplier vetting, reputation monitoring and detecting seller quality drift across 20 marketplaces.",
+      "bazaar_description": "Amazon seller feedback reviews with rating, date and review text, paginated and filterable to a star-rating window. Built for supplier vetting, reputation monitoring and detecting seller quality drift across 23 marketplaces.",
       "price_model": "flat",
       "price_usd": "0.003",
       "input_schema": {
@@ -1245,7 +1275,10 @@
               "SG",
               "SE",
               "TR",
-              "BE"
+              "BE",
+              "IE",
+              "ZA",
+              "EG"
             ],
             "default": "US",
             "description": "Marketplace country code."

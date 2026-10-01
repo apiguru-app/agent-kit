@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.47
+  version: 1.1.48
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
-    deals, seller profiles, and live offers/stock across 20 country marketplaces.'
+    deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
-    deals, seller profiles, and live offers/stock across 20 country marketplaces.
+    deals, seller profiles, and live offers/stock across 23 country marketplaces.
 
 
     ## Two ways to call this API
@@ -155,6 +155,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       responses:
         '200':
@@ -308,6 +311,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       responses:
         '200':
@@ -417,6 +423,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       - name: sort_by
         in: query
@@ -618,6 +627,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       responses:
         '200':
@@ -711,6 +723,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       - name: check_inventory
         in: query
@@ -843,6 +858,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       - name: check_inventory
         in: query
@@ -1075,6 +1093,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       responses:
         '200':
@@ -1194,6 +1215,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       - name: offset
         in: query
@@ -1410,6 +1434,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       responses:
         '200':
@@ -1532,6 +1559,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       - name: sort_by
         in: query
@@ -1711,6 +1741,9 @@ paths:
           - SE
           - TR
           - BE
+          - IE
+          - ZA
+          - EG
           default: US
       responses:
         '200':
@@ -1760,6 +1793,9 @@ x-apiguru-geos:
   SE: se
   TR: com.tr
   BE: com.be
+  IE: ie
+  ZA: co.za
+  EG: eg
 x-apiguru-conventions:
   asin_pattern: ^[A-Z0-9]{10}$
   asin_note: 'On agent.apiguru.app and the MCP server any case is accepted and upper-cased, and an Amazon

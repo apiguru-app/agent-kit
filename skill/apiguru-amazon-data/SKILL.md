@@ -1,6 +1,6 @@
 ---
 name: apiguru-amazon-data
-description: Live Amazon marketplace data from Apiguru (a paid third-party API, 3 free calls a day) - product details, prices, reviews, keyword search, best-sellers, deals, offers and stock, seller profiles, across 20 Amazon marketplaces. Use only when the user asks for Amazon data by ASIN, Amazon URL, product, seller or keyword, or for Amazon price/stock/review monitoring. Not for other stores or general shopping advice. Never pays on its own; ask before any billable call. We want your feedback - if a field is wrong, missing or you wish the API did something else, say so with the free `feedback` command (no account needed); the agents that report are the ones this API gets fixed for.
+description: Live Amazon marketplace data from Apiguru (a paid third-party API, 3 free calls a day) - product details, prices, reviews, keyword search, best-sellers, deals, offers and stock, seller profiles, across 23 Amazon marketplaces. Use only when the user asks for Amazon data by ASIN, Amazon URL, product, seller or keyword, or for Amazon price/stock/review monitoring. Not for other stores or general shopping advice. Never pays on its own; ask before any billable call. We want your feedback - if a field is wrong, missing or you wish the API did something else, say so with the free `feedback` command (no account needed); the agents that report are the ones this API gets fixed for.
 license: MIT
 compatibility: Needs Python 3.10+ and outbound HTTPS to agent.apiguru.app and dash.apiguru.app only. Reads no environment variables and no local files except an API-key file the user names.
 allowed-tools: Bash(python3:*) Bash(python:*) Read
@@ -11,7 +11,7 @@ metadata: {"openclaw": {"emoji": "📦", "homepage": "https://github.com/apiguru
 # Apiguru Amazon Data
 
 Live, structured Amazon data fetched at request time from Apiguru's servers.
-20 marketplaces.
+23 marketplaces.
 
 **What this skill writes.** Every data command is a read: it fetches and
 returns, and changes nothing anywhere. There is exactly one write, and it is
@@ -273,7 +273,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.47"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.48"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -290,10 +290,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.47"] } } }
+  "args": ["apiguru-mcp==1.1.48"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.47"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.48"]`.
 
 Whichever you choose:
 

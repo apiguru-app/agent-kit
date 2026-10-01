@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "app.apiguru/amazon-data",
   "title": "Apiguru Amazon Data",
-  "description": "Live Amazon product, review, search, deal, offer/stock and seller data across 20 marketplaces.",
-  "version": "1.1.47",
+  "description": "Live Amazon product, review, search, deal, offer/stock and seller data across 23 marketplaces.",
+  "version": "1.1.48",
   "repository": {
     "url": "https://github.com/apiguru-app/agent-kit",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "apiguru-mcp",
-      "version": "1.1.47",
+      "version": "1.1.48",
       "transport": {
         "type": "stdio"
       },
@@ -37,7 +37,7 @@
     {
       "registryType": "npm",
       "identifier": "apiguru-mcp",
-      "version": "1.1.47",
+      "version": "1.1.48",
       "transport": {
         "type": "stdio"
       },

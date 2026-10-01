@@ -33,6 +33,9 @@ Pass as `geo`, chosen from the user's request or the Amazon domain they mention 
 | `SE` | amazon.se |
 | `TR` | amazon.com.tr |
 | `BE` | amazon.com.be |
+| `IE` | amazon.ie |
+| `ZA` | amazon.co.za |
+| `EG` | amazon.eg |
 
 ## `GET /v2/product-details`
 

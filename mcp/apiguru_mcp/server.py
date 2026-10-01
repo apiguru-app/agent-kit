@@ -89,7 +89,7 @@ READ_ONLY = ToolAnnotations(
 )
 
 INSTRUCTIONS = """\
-Apiguru returns live, structured Amazon marketplace data across 20 country
+Apiguru returns live, structured Amazon marketplace data across 23 country
 marketplaces. Data is fetched at request time, not served from a cache.
 
 Choosing a tool:
