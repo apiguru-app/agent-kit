@@ -54,6 +54,7 @@ PAYMENT_META_KEY = "x402/payment"
 PAYMENT_RESPONSE_META_KEY = "x402/payment-response"
 from .shaping import (
     COMPACT_LIST_FIELDS,
+    COMPACT_BATCH_FIELDS,
     COMPACT_PRODUCT_FIELDS,
     DEFAULT_LIST_LIMIT,
     LIST_KEYS,
@@ -453,6 +454,7 @@ def _add_capabilities_tool(server: MCPServer) -> None:
                     "without_a_wallet": client_module.OAUTH_URL,
                 },
                 "compact_product_fields": list(COMPACT_PRODUCT_FIELDS),
+                "compact_batch_fields": list(COMPACT_BATCH_FIELDS),
                 "compact_list_fields": list(COMPACT_LIST_FIELDS),
                 "list_default_limit": DEFAULT_LIST_LIMIT,
                 "large_optional_fields": list(KNOWN_LARGE_FIELDS),

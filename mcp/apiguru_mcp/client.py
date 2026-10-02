@@ -93,6 +93,10 @@ OAUTH_URL = "https://mcp.apiguru.app/account"
 # Where a user gets a key once the free calls are spent; the tags let the
 # dashboard tell these sign-ups apart (same idea as the gateway's 402 link).
 SIGNUP_URL = f"{DASH}/register?utm_source=agent&utm_campaign=mcp-402"
+# Keys of an API refusal that tell the caller what to do, carried into the
+# tool error as they are (see guidance() in _request).
+_GUIDANCE_KEYS = ("next_step", "code", "param", "allowed", "did_you_mean", "ignored_parameters",
+                  "parameters_interpreted", "path_interpreted", "hint")
 
 
 # --------------------------------------------------------------------------
@@ -558,6 +562,22 @@ async def _fetch(
             return str(payload.get("message") or payload.get("error") or "")
         return response.text[:300]
 
+    def guidance() -> dict[str, Any]:
+        """What the API itself said to do about a refusal.
+
+        2026-10-02: best_sellers(category="camera") on amazon.es came back
+        with the API's `param`, its 33 valid departments under `allowed` and
+        a next_step naming them -- and this layer replaced all three with a
+        generic "an ASIN is 10 letters ... geo is one of the 20 codes". The
+        agent had to make a further call just to learn the department list.
+        """
+        if not isinstance(payload, dict):
+            return {}
+        out = {k: payload[k] for k in _GUIDANCE_KEYS if payload.get(k) not in (None, "", [], {})}
+        if isinstance(out.get("allowed"), list) and len(out["allowed"]) > 60:
+            out["allowed"] = out["allowed"][:60] + [f"... {len(payload['allowed']) - 60} more"]
+        return out
+
     if status == 402:
         if keyed:
             raise ApiguruError(
@@ -609,11 +629,11 @@ async def _fetch(
             next_step="Retrying will not help; try a different geo or move on.",
         )
     if status == 400:
+        hints = guidance()
         raise ApiguruError(
             "Bad input: " + detail(),
             http_status=400, billed=False, retryable=False,
-            next_step=("Fix the parameters (an ASIN is 10 letters and digits, or an Amazon product URL; "
-                       "geo is one of the 20 codes) and retry."),
+            **{"next_step": "Fix the parameter named in `param` and retry; nothing was charged.", **hints},
         )
     if status >= 500:
         raise ApiguruError(
@@ -624,7 +644,7 @@ async def _fetch(
     if status >= 400:
         raise ApiguruError(
             f"HTTP {status} from {path}: {detail()}",
-            http_status=status, billed=False, retryable=False,
+            http_status=status, billed=False, retryable=False, **guidance(),
         )
     if payload is None:
         raise ApiguruError(

@@ -52,7 +52,7 @@ Use for one product's current listing. Not for several ASINs (product_details_ba
 
 ## `GET /v2/product-reviews`
 
-Use for what customers say about one product. Not for its full review history or star-filtered reviews (not available), or for seller feedback (seller_reviews). Returns the review block for one ASIN: overall star rating, total rating count, Amazon's 'customers say' AI summary, and the individual review list.
+Use for what customers say about one product. Not for its full review history (Amazon serves full and star-filtered review lists only to signed-in accounts) or for seller feedback (seller_reviews). Returns the overall rating, rating count, review_histogram (percent of all ratings per star), Amazon's 'customers say' AI summary where that marketplace shows one, and the reviews on the product page (typically up to 8 from this marketplace and 5 from other countries), each with rating, review_date, review_country, from_this_marketplace, verified flag and helpful_votes; from_rating/to_rating keep a star window.
 
 **Price:** $0.003 per call
 
@@ -60,8 +60,10 @@ Use for what customers say about one product. Not for its full review history or
 |---|---|---|---|
 | `asin` | string | yes | Single Amazon ASIN, 10 uppercase alphanumeric characters. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |
+| `from_rating` | integer | no | Lowest star rating to include, 1-5. Filters the reviews the product page shows (see review_coverage). |
+| `to_rating` | integer | no | Highest star rating to include, 1-5. from_rating=1&to_rating=3 keeps the critical ones among them. |
 
-> Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it returns the rating, rating count, the 'customers say' summary and the reviews Amazon shows on the product page itself. There is no paging, star filter or sort, and no full review history. For per-star counts read the rating histogram on product_details.
+> Same 404-billed / 503-not-billed semantics as product_details. No paging or sort: the reviews are those on the product page; review_coverage says how many and from where. from_rating/to_rating filter them. review_histogram (here and on product_details) gives the share of every rating. customers_say is null where Amazon shows no summary (several marketplaces never do); customers_say_note then says so.
 
 ## `GET /search`
 
@@ -123,13 +125,13 @@ Use to compare sellers' current offers and see who holds the buy box, and, with 
 
 ## `GET /v2/best-sellers`
 
-Use for what sells best in a department right now. The rank is Amazon's, not a sales figure. Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department), available_categories (that marketplace's departments with slugs) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department ("women's shoes", "mules & clogs"); category.subcategory_path gives the node's full path and category.heading the page's own title line.
+Use for what sells best in a department right now. The rank is Amazon's, not a sales figure. Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department, or 'subcategory' when a word such as 'camera' named a subcategory), available_categories (that marketplace's departments with slugs; MCP: with compact=false) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department ("women's shoes", "mules & clogs"); category.subcategory_path gives the node's full path and category.heading the page's own title line.
 
 **Price:** $0.003 per call
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
-| `category` | string | no | Best-seller department, by slug or by name as Amazon shows it for that marketplace (case-insensitive; a unique fragment works, and the answer's category_resolution says when a fragment was used -- 'shoes' is the whole 'Clothing, Shoes & Jewelry' department, and the hint then lists the Shoes subcategories with their ids). Departments and their slugs differ per marketplace: amazon.com has electronics, amazon.de has ce-de (Electronics & Photo). Every answer lists that marketplace's departments under available_categories; an unknown or ambiguous name is a free 400 listing them. Default `appliances`. |
+| `category` | string | no | Best-seller department, by slug or by name as Amazon shows it for that marketplace (case-insensitive; a unique fragment works, and the answer's category_resolution says when a fragment was used -- 'shoes' is the whole 'Clothing, Shoes & Jewelry' department, and the hint then lists the Shoes subcategories with their ids). Departments and their slugs differ per marketplace: amazon.com has electronics, amazon.de has ce-de (Electronics & Photo). A word that names a subcategory works too: category=camera on amazon.es is Electronics > Camera & Photo (category_resolution.via says 'subcategory'; several equally good matches are a free 400 listing each as category + subcategory_code). REST answers list the marketplace's departments under available_categories (the MCP tool with compact=false); an unknown name is a free 400 listing them. Default `appliances`. |
 | `subcategory_code` | string | no | Browse node id under `category`: one from available_subcategories of a previous answer, or on amazon.com any node id at any depth (679410011 is Women > Shoes > Mules & Clogs) or a name resolved under the department ("women's shoes", "mens boots", "mules & clogs"). A name that fits two nodes equally (Men > Shoes > Boots and Women > Shoes > Boots) is a free 400 listing both ids with their paths. |
 | `page` | integer | no | Result page, 1-based, 50 rows each; Amazon's lists stop at page 5. Default `1`. |
 | `geo` | enum | no | Marketplace country code. Default `US`. |

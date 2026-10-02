@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.49",
+    "version": "1.1.50",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -188,7 +188,7 @@
       "path": "/v2/product-reviews",
       "method": "GET",
       "summary": "Customer reviews for a single ASIN",
-      "description": "Use for what customers say about one product. Not for its full review history or star-filtered reviews (not available), or for seller feedback (seller_reviews). Returns the review block for one ASIN: overall star rating, total rating count, Amazon's 'customers say' AI summary, and the individual review list.",
+      "description": "Use for what customers say about one product. Not for its full review history (Amazon serves full and star-filtered review lists only to signed-in accounts) or for seller feedback (seller_reviews). Returns the overall rating, rating count, review_histogram (percent of all ratings per star), Amazon's 'customers say' AI summary where that marketplace shows one, and the reviews on the product page (typically up to 8 from this marketplace and 5 from other countries), each with rating, review_date, review_country, from_this_marketplace, verified flag and helpful_votes; from_rating/to_rating keep a star window.",
       "bazaar_description": "Amazon customer reviews for any ASIN: overall star rating, total rating count, the 'customers say' AI summary, and individual review text with per-review ratings. Useful for sentiment analysis, product research and competitive monitoring across 23 marketplaces.",
       "price_model": "flat",
       "price_usd": "0.003",
@@ -229,6 +229,18 @@
             ],
             "default": "US",
             "description": "Marketplace country code."
+          },
+          "from_rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Lowest star rating to include, 1-5. Filters the reviews the product page shows (see review_coverage)."
+          },
+          "to_rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Highest star rating to include, 1-5. from_rating=1&to_rating=3 keeps the critical ones among them."
           }
         },
         "required": [
@@ -244,17 +256,47 @@
           "product_star_rating": "4.5",
           "product_num_ratings": 1284,
           "customers_say": "Customers like the build quality and value.",
-          "product_reviews": []
+          "product_reviews": [
+            {
+              "author": "A. Customer",
+              "review_title": "Great for travel",
+              "review_text": "Small, sharp photos, battery lasts a day.",
+              "star_rating": "5 out of 5 stars",
+              "rating": 5.0,
+              "review_place": "Reviewed in Spain on 10 August 2026",
+              "review_date": "2026-08-10",
+              "review_country": "Spain",
+              "from_this_marketplace": true,
+              "is_verified": true,
+              "helpful_count": "3 people found this helpful",
+              "helpful_votes": 3
+            }
+          ],
+          "review_histogram": {
+            "5_star": 80,
+            "4_star": 11,
+            "3_star": 3,
+            "2_star": 1,
+            "1_star": 5
+          },
+          "review_coverage": {
+            "reviews_on_page": 13,
+            "from_this_marketplace": 8,
+            "from_other_countries": 5,
+            "returned": 13,
+            "rating_filter": null,
+            "note": "These are the reviews Amazon shows on the product page ..."
+          }
         },
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Same 404-billed / 503-not-billed semantics as product_details. Takes no filters: it returns the rating, rating count, the 'customers say' summary and the reviews Amazon shows on the product page itself. There is no paging, star filter or sort, and no full review history. For per-star counts read the rating histogram on product_details.",
+      "notes": "Same 404-billed / 503-not-billed semantics as product_details. No paging or sort: the reviews are those on the product page; review_coverage says how many and from where. from_rating/to_rating filter them. review_histogram (here and on product_details) gives the share of every rating. customers_say is null where Amazon shows no summary (several marketplaces never do); customers_say_note then says so.",
       "mcp_params": {
         "max_reviews": {
           "type": "integer",
           "minimum": 0,
           "default": 10,
-          "description": "Cap on individual reviews returned (0 = all). The rating summary and customers_say are always returned; _reviews_total says how many exist."
+          "description": "Cap on individual reviews returned (0 = all). The rating summary, review_histogram and customers_say are always returned; _reviews_total is the number of reviews on the product page (not all reviews; see review_coverage)."
         }
       }
     },
@@ -652,7 +694,7 @@
       "method": "GET",
       "upstream_limit": true,
       "summary": "Best-seller rankings for a category",
-      "description": "Use for what sells best in a department right now. The rank is Amazon's, not a sales figure. Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department), available_categories (that marketplace's departments with slugs) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department (\"women's shoes\", \"mules & clogs\"); category.subcategory_path gives the node's full path and category.heading the page's own title line.",
+      "description": "Use for what sells best in a department right now. The rank is Amazon's, not a sales figure. Best-seller rankings for a department of one marketplace, 50 per page. Every answer carries the department it resolved to and how (category_resolution: by slug, name or a fragment of a name, with a hint when a fragment such as 'shoes' landed on the whole 'Clothing, Shoes & Jewelry' department, or 'subcategory' when a word such as 'camera' named a subcategory), available_categories (that marketplace's departments with slugs; MCP: with compact=false) and available_subcategories (the children of the node shown, with the ids subcategory_code takes). On amazon.com subcategory_code also takes any browse node id at any depth, or a name resolved under the department (\"women's shoes\", \"mules & clogs\"); category.subcategory_path gives the node's full path and category.heading the page's own title line.",
       "bazaar_description": "Current Amazon best-seller rankings for any category or subcategory, with rank, ASIN, title, price and rating for each entry. Paginated and available across 23 country marketplaces. Useful for trend detection, category research and product sourcing.",
       "price_model": "flat",
       "price_usd": "0.003",
@@ -662,7 +704,7 @@
           "category": {
             "type": "string",
             "default": "appliances",
-            "description": "Best-seller department, by slug or by name as Amazon shows it for that marketplace (case-insensitive; a unique fragment works, and the answer's category_resolution says when a fragment was used -- 'shoes' is the whole 'Clothing, Shoes & Jewelry' department, and the hint then lists the Shoes subcategories with their ids). Departments and their slugs differ per marketplace: amazon.com has electronics, amazon.de has ce-de (Electronics & Photo). Every answer lists that marketplace's departments under available_categories; an unknown or ambiguous name is a free 400 listing them."
+            "description": "Best-seller department, by slug or by name as Amazon shows it for that marketplace (case-insensitive; a unique fragment works, and the answer's category_resolution says when a fragment was used -- 'shoes' is the whole 'Clothing, Shoes & Jewelry' department, and the hint then lists the Shoes subcategories with their ids). Departments and their slugs differ per marketplace: amazon.com has electronics, amazon.de has ce-de (Electronics & Photo). A word that names a subcategory works too: category=camera on amazon.es is Electronics > Camera & Photo (category_resolution.via says 'subcategory'; several equally good matches are a free 400 listing each as category + subcategory_code). REST answers list the marketplace's departments under available_categories (the MCP tool with compact=false); an unknown name is a free 400 listing them."
           },
           "subcategory_code": {
             "type": "string",

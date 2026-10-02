@@ -79,7 +79,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.49"
+SKILL_VERSION = "1.1.50"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -131,6 +131,8 @@ RULES = {
         'params': {
             'asin': {'type': 'string', 'pattern': '^[A-Z0-9]{10}$'},
             'geo': {'type': 'string', 'enum': GEOS},
+            'from_rating': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+            'to_rating': {'type': 'integer', 'minimum': 1, 'maximum': 5},
             'max_reviews': {'type': 'integer', 'minimum': 0},
         },
     },

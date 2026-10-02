@@ -110,7 +110,7 @@ Full parameter reference: `references/endpoints.md`.
    costs USD 0.08 and one round trip; ten through `/v2/product-details` costs
    USD 0.10 and ten round trips.
 3. **Choose `geo` from the user's request**, never by habit: amazon.de → `DE`,
-   amazon.co.uk → `UK`, and so on (all 20 codes in `references/endpoints.md`).
+   amazon.co.uk → `UK`, and so on (all 23 codes in `references/endpoints.md`).
    If the marketplace is not clear, ask. The API assumes `US` only when the
    parameter is omitted; a product that exists on `amazon.de` may genuinely
    `404` on `US`, and that 404 is billed on the keyed path.
@@ -273,7 +273,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.49"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.50"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -290,10 +290,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.49"] } } }
+  "args": ["apiguru-mcp==1.1.50"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.49"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.50"]`.
 
 Whichever you choose:
 

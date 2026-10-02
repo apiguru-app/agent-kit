@@ -24,13 +24,26 @@ from pydantic import BaseModel, ConfigDict, create_model
 COMPACT_PRODUCT_FIELDS: tuple[str, ...] = (
     "asin", "parent_asin", "product_title", "brand_name",
     "product_price", "product_original_price", "product_price_max", "prime_price", "currency",
-    "price_snapshot", "product_star_rating", "product_num_ratings", "product_num_offers",
+    "price_snapshot", "product_star_rating", "product_num_ratings", "review_histogram", "product_num_offers",
     "product_availability", "in_stock", "condition", "pre_order", "sales_volume",
     "delivery_info", "buybox_winner", "offer", "badges",
     "category", "category_path", "ranks",
     "about_product", "product_description", "product_overview",
     "product_photo", "product_url", "dimension", "weight",
     "customers_say", "variation_summary",
+)
+
+# The same, for product_details_batch rows, which speak their own vocabulary
+# (`title`, `price`, `availability`, `product_info` for the bullets, and a
+# 200-byte rating summary in `product_reviews`). Projected through the list
+# above, a compact batch row kept `asin`, `currency`, `condition` and
+# `variation_summary` and nothing else: an agent called the default record
+# "almost empty" and paid for a second call naming the fields (2026-10-02).
+COMPACT_BATCH_FIELDS: tuple[str, ...] = (
+    "asin", "title", "price", "prime_price", "basis_price", "basis_price_label",
+    "savings_percentage", "currency", "condition", "availability", "is_best_seller",
+    "product_reviews", "deal_type", "delivery", "product_info", "description",
+    "url", "details_url", "variation_summary", "error", "status",
 )
 
 # Always present in a projected record, whatever `fields` says.
@@ -62,14 +75,15 @@ def parse_fields(fields: str | None) -> list[str]:
     return [f.strip() for f in fields.split(",") if f.strip()]
 
 
-def project_record(record: dict[str, Any], *, compact: bool, fields: list[str]) -> dict[str, Any]:
+def project_record(record: dict[str, Any], *, compact: bool, fields: list[str],
+                   compact_fields: tuple[str, ...] = COMPACT_PRODUCT_FIELDS) -> dict[str, Any]:
     """One product record -> the keys the caller asked for."""
     if not isinstance(record, dict):
         return record
     if fields:
         keep = list(dict.fromkeys([*_ALWAYS, *fields]))
     elif compact:
-        keep = list(COMPACT_PRODUCT_FIELDS)
+        keep = list(compact_fields)
     else:
         return record
 
@@ -99,7 +113,8 @@ def shape_product_payload(payload: Any, *, compact: bool, fields: str | None) ->
     if isinstance(payload.get("results"), list):
         return {
             **payload,
-            "results": [project_record(item, compact=compact, fields=wanted) for item in payload["results"]],
+            "results": [project_record(item, compact=compact, fields=wanted, compact_fields=COMPACT_BATCH_FIELDS)
+                        for item in payload["results"]],
         }
     return payload
 
@@ -245,10 +260,10 @@ LIST_NOTES: dict[str, tuple[str, ...]] = {
         "`rank` is the position within the requested category on this page, "
         "not an absolute best-seller rank across Amazon.",
         "`category` says which department the answer is for; "
-        "`available_categories` lists this marketplace's departments (slugs "
-        "differ per marketplace) and `available_subcategories` the children "
-        "of the one shown, whose ids `subcategory_code` takes. 50 rows a "
-        "page, pages 1-5.",
+        "`available_subcategories` lists the children of the one shown, whose "
+        "ids `subcategory_code` takes. The marketplace's departments "
+        "(`available_categories`, slugs differ per marketplace) come with "
+        "compact=false. 50 rows a page, pages 1-5.",
         "`category_resolution.via` says how `category` was read; `fragment` "
         "means a word matched a department name ('shoes' -> the whole "
         "'Clothing, Shoes & Jewelry' department) and `hint` then lists the "
@@ -305,6 +320,30 @@ def _flatten_delivery(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "delivery_date": date}
 
 
+# How best_sellers read `category` when it is sure: the department list is then
+# no help to the caller. A word matched by a fragment is a guess, and keeps it.
+_CATEGORY_SETTLED = ("slug", "name", "legacy", "subcategory", "department_hint")
+
+
+def _without_department_list(payload: dict[str, Any]) -> dict[str, Any]:
+    """best_sellers: drop `available_categories` once the category is settled.
+
+    Every answer carried the marketplace's 30-40 departments, so the 2026-10-02
+    agent paid for the same list four times in one task, `limit: 1` included.
+    The children of the category shown (`available_subcategories`) stay: they
+    are how an agent narrows the next call.
+    """
+    cats = payload.get("available_categories")
+    via = (payload.get("category_resolution") or {}).get("via")
+    if not isinstance(cats, list) or via not in _CATEGORY_SETTLED:
+        return payload
+    out = {k: v for k, v in payload.items() if k != "available_categories"}
+    out["_available_categories_omitted"] = (
+        f"{len(cats)} departments; listed with compact=false, and in the error when a category "
+        "is not recognised")
+    return out
+
+
 def project_list_row(row: Any, *, compact: bool, fields: list[str]) -> Any:
     if not isinstance(row, dict):
         return row
@@ -352,6 +391,8 @@ def shape_list_payload(
     # an agent should not have to know an endpoint's nesting to find out that
     # its answer was trimmed.
     out = _replace_at(payload, path, shaped)
+    if tool == "best_sellers" and (compact or wanted):
+        out = _without_department_list(out)
 
     # The dropped keys are the same for every row, so name them once for the
     # whole answer rather than repeating a list on each of 48 rows. Compare
