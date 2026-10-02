@@ -77,6 +77,14 @@ SNIFF_BYTES = 4096
 
 TOP_LEVEL_ERROR = re.compile(r'\{\s*"jsonrpc"\s*:\s*"2\.0"\s*,\s*"id"\s*:\s*[^,{]*,\s*(?P<err>"error"\s*:)')
 TOOL_ERROR = re.compile(r'"isError"\s*:\s*true')
+# The tool result's first text block, and what a reason is read from in it:
+# pydantic's "<field>" line followed by "  <message> [type=<kind>, input_value=...]",
+# or one of our JSON error documents ("code", "param").
+TOOL_TEXT = re.compile(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"')
+PYDANTIC_LINE = re.compile(r"^\s+(?P<msg>.+?) \[type=(?P<kind>[A-Za-z_]+)")
+ERROR_CODE = re.compile(r'"code"\s*:\s*"(?P<code>[A-Za-z_]+)"')
+ERROR_PARAM = re.compile(r'"param"\s*:\s*"(?P<param>[A-Za-z_]+)"')
+REASON_CHARS = 200
 
 
 def needs_legacy_routing(version: str | None, body: Any) -> bool:
@@ -276,8 +284,42 @@ def _in_band_error(chunk: bytes, rpc: str) -> str | None:
     if match:
         return "rpc_error " + text[match.start("err"):match.start("err") + ERROR_SNIPPET].replace("\n", " ")
     if rpc.startswith("tools/call") and TOOL_ERROR.search(text):
-        return "tool_error"
+        reason = tool_error_reason(text)
+        return f"tool_error reason={reason!r}" if reason else "tool_error"
     return None
+
+
+def tool_error_reason(text: str) -> str | None:
+    """Why a tool call failed, without the caller's values.
+
+    2026-10-01: an npm 1.1.48 user's first search came back as a tool error
+    and the log said only `rejected arguments: ['query']` (the SDK logs field
+    names). The field and the rule it broke are enough to tell a client bug
+    from ours; the value is the caller's data and is never logged.
+    """
+    match = TOOL_TEXT.search(text)
+    if not match:
+        return None
+    try:
+        message = json.loads('"' + match.group(1) + '"')
+    except ValueError:
+        return None
+    if "validation error" in message:
+        reasons, field = [], None
+        for line in message.splitlines()[1:]:
+            hit = PYDANTIC_LINE.match(line)
+            if hit and field:
+                reasons.append(f"{field}: {hit['msg']} ({hit['kind']})")
+                field = None
+            elif line.strip() and not line[0].isspace():
+                field = line.strip()
+        return "; ".join(reasons)[:REASON_CHARS] or None
+    code = ERROR_CODE.search(message)
+    if code:
+        param = ERROR_PARAM.search(message)
+        return code["code"] + (f" param={param['param']}" if param else "")
+    first = message.strip().splitlines()[0] if message.strip() else ""
+    return first[:REASON_CHARS] or None
 
 
 class McpTrafficMiddleware:

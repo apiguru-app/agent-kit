@@ -90,6 +90,9 @@ transport: httpx.AsyncBaseTransport | None = None
 
 DASH = "https://dash.apiguru.app"
 OAUTH_URL = "https://mcp.apiguru.app/account"
+# Where a user gets a key once the free calls are spent; the tags let the
+# dashboard tell these sign-ups apart (same idea as the gateway's 402 link).
+SIGNUP_URL = f"{DASH}/register?utm_source=agent&utm_campaign=mcp-402"
 
 
 # --------------------------------------------------------------------------
@@ -400,12 +403,13 @@ def _payment_required(document: dict[str, Any], *, paying: bool,
             "`accepts` (USDC) and resends the call with the payment in "
             f"params._meta[\"x402/payment\"]; (2) without a wallet, ask the user to connect {OAUTH_URL} "
             "and sign in -- same tools, billed to their Apiguru account; (3) send an Apiguru API key "
-            f"from {DASH} (the X-API-KEY header on this MCP connection, or APIGURU_API_KEY for a "
-            "local install)."
+            f"(free trial calls; no account yet: {SIGNUP_URL} ) as the X-API-KEY header on this MCP "
+            "connection, or APIGURU_API_KEY for a local install."
         )
         if free_left is not None:
             doc["free_probes_remaining"] = free_left
-    doc.update(http_status=402, billed=False, retryable=False, sign_in_url=OAUTH_URL)
+    doc.update(http_status=402, billed=False, retryable=False, sign_in_url=OAUTH_URL,
+               api_key_url=SIGNUP_URL)
     return PaymentRequiredError(doc)
 
 
@@ -499,6 +503,10 @@ async def _fetch(
         if client_ip:
             # So the backend's request log records the person, not this box.
             headers["X-Forwarded-For"] = client_ip
+        if os.environ.get("APIGURU_API_INTERNAL_URL", "").strip() and not os.environ.get("APIGURU_BASE_URL"):
+            # Hosted: the call goes to the backend on the private network,
+            # and its request log marks it as relayed by this server.
+            headers["X-Apiguru-Via"] = "mcp-hosted"
     else:
         internal = _internal_gateway()
         if internal and not os.environ.get("APIGURU_BASE_URL"):
@@ -566,7 +574,8 @@ async def _fetch(
             "Payment required: the free probe budget for this caller is spent. " + detail(),
             http_status=402, billed=False, retryable=False,
             next_step=(
-                f"Set APIGURU_API_KEY from {DASH}, or connect the OAuth endpoint {OAUTH_URL} and sign in."
+                f"Set APIGURU_API_KEY (no account yet: {SIGNUP_URL} ), or connect the OAuth "
+                f"endpoint {OAUTH_URL} and sign in."
             ),
         )
     if status == 401:

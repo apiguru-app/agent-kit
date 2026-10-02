@@ -158,6 +158,8 @@ def output_model_for(tool_name: str, example: Any) -> type[BaseModel] | None:
 COMPACT_LIST_FIELDS: tuple[str, ...] = (
     "asin", "product_title", "product_brand",
     "product_price", "product_original_price", "product_price_per_unit",
+    # search rows say which currency their prices are in (2026-10-02)
+    "currency",
     "product_star_rating", "product_num_ratings",
     "sales_volume", "is_prime", "is_sponsored", "badges", "promotion",
     "product_stock_message", "delivery_date",

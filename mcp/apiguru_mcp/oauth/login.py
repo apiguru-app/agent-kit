@@ -162,7 +162,7 @@ Calls made through it bill <em>your</em> Apiguru account at your plan's rates.</
  <input id="api_key" name="api_key" type="password" autocomplete="off" required>
  <button type="submit">Use this key and allow</button>
 </form>
-<p class="muted">No account? <a href="https://dash.apiguru.app/register">Create one</a>. You can revoke this connection any time from the client that asked for it.</p>
+<p class="muted">No account? <a href="https://dash.apiguru.app/register?utm_source=agent&amp;utm_campaign=mcp-oauth">Create one</a>. You can revoke this connection any time from the client that asked for it.</p>
 </main></body></html>"""
 
 
