@@ -3,7 +3,7 @@
   "name": "app.apiguru/amazon-data",
   "title": "Apiguru Amazon Data",
   "description": "Live Amazon product, review, search, deal, offer/stock and seller data across 23 marketplaces.",
-  "version": "1.1.50",
+  "version": "1.1.51",
   "repository": {
     "url": "https://github.com/apiguru-app/agent-kit",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "apiguru-mcp",
-      "version": "1.1.50",
+      "version": "1.1.51",
       "transport": {
         "type": "stdio"
       },
@@ -37,7 +37,7 @@
     {
       "registryType": "npm",
       "identifier": "apiguru-mcp",
-      "version": "1.1.50",
+      "version": "1.1.51",
       "transport": {
         "type": "stdio"
       },

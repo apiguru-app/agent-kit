@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.50
+  version: 1.1.51
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
