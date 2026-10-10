@@ -79,7 +79,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.51"
+SKILL_VERSION = "1.1.52"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -616,8 +616,13 @@ def request(path: str, params: dict[str, str], api_key: str | None, retries: int
     return last_error or transport_error("request_failed", "request failed")
 
 
-def explain(status: int, headers: dict) -> None:
-    """Say what a status means for cost and for what to do next."""
+def explain(status: int, headers: dict, keyed: bool = False) -> None:
+    """Say what a status means for cost and for what to do next.
+
+    A 402 means different things on the two paths: keyless, the free probes
+    are spent; keyed, the account cannot pay for this call (its body says
+    what it can still cover). Both used to read "the free probes for this
+    machine are spent"."""
     # The live figure beats any number in the docs, and some answers report
     # yes/no rather than a count.
     left = header(headers, "X-Free-Probes-Remaining")
@@ -649,6 +654,13 @@ def explain(status: int, headers: dict) -> None:
         503: "Temporary failure on our side, not billed. Safe to retry.",
         504: "Gateway timeout, not billed. Retried; a narrower query often succeeds.",
     }
+    if keyed:
+        messages[402] = (
+            "Payment required: the account behind this API key cannot pay for this call. "
+            "Nothing was billed. The body says what it can still cover (affordable_requests, "
+            "max_items) and what to do (next_step): a smaller call may fit. This script does "
+            "not pay or top up; tell the user, who can top up at https://dash.apiguru.app/top-up."
+        )
     if status in messages:
         print(f"  {messages[status]}", file=sys.stderr)
 
@@ -875,7 +887,7 @@ def main(argv: list[str] | None = None) -> int:
     status, body, headers = request(path, params, api_key)
 
     if not args.raw:
-        explain(status, headers)
+        explain(status, headers, keyed=bool(api_key))
 
     emit(body)
 

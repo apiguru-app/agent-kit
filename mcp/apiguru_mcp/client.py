@@ -97,6 +97,37 @@ SIGNUP_URL = f"{DASH}/register?utm_source=agent&utm_campaign=mcp-402"
 # tool error as they are (see guidance() in _request).
 _GUIDANCE_KEYS = ("next_step", "code", "param", "allowed", "did_you_mean", "ignored_parameters",
                   "parameters_interpreted", "path_interpreted", "hint")
+# What an account's 402 says it can still pay for, carried into the tool error.
+_PAYMENT_KEYS = ("code", "requested_requests", "affordable_requests", "max_items",
+                 "requests_per_item", "trial_requests_remaining", "balance_usd", "top_up_url")
+
+
+def _account_payment_required(payload: Any, text: str) -> ApiguruError:
+    """A 402 on an account (API key or OAuth sign-in): it cannot pay for THIS call.
+
+    2026-10-10: every such 402 opened with "this Apiguru account has no
+    balance or trial calls left" while the API's own text went on to say
+    "your free trial covers 9 more requests", and next_step was replaced by a
+    bare "Top up", dropping the API's "reduce this call to at most N items".
+    The headline now follows `affordable_requests`; the API's next_step and
+    numbers are kept.
+    """
+    body = payload if isinstance(payload, dict) else {}
+    left = body.get("affordable_requests")
+    if isinstance(left, int) and left > 0:
+        head = (f"Payment required: this call costs more than this Apiguru account can pay right now "
+                f"({left} request{'s' if left != 1 else ''} left).")
+    else:
+        head = "Payment required: this Apiguru account has no balance or trial calls left."
+    top_up = body.get("top_up_url") or f"{DASH}/top-up"
+    extras = {k: body[k] for k in _PAYMENT_KEYS if body.get(k) is not None}
+    extras.setdefault("top_up_url", top_up)
+    return ApiguruError(
+        f"{head} {text}".strip(),
+        http_status=402, billed=False, retryable=False,
+        next_step=body.get("next_step") or f"Ask the account owner to top up at {top_up}.",
+        **extras,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -580,12 +611,7 @@ async def _fetch(
 
     if status == 402:
         if keyed:
-            raise ApiguruError(
-                "Payment required: this Apiguru account has no balance or trial calls left. "
-                + detail(),
-                http_status=402, billed=False, retryable=False,
-                next_step=f"Top up at {DASH}, or sign in with a funded account.",
-            )
+            raise _account_payment_required(payload, detail())
         document = _x402_document(response, payload)
         if document is not None:
             raise _payment_required(document, paying=payment is not None,

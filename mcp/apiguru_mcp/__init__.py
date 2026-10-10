@@ -1,7 +1,7 @@
 """MCP server for the Apiguru Amazon Data API."""
 
 # Before the imports: server.py reads it to stamp feedback entries.
-__version__ = "1.1.51"
+__version__ = "1.1.52"
 
 from .server import build_server  # noqa: E402
 from .spec import api_info, endpoints, load_spec  # noqa: E402
