@@ -24,13 +24,13 @@ single-item equivalents. Always prefer them for more than one item.
 
 | Status | Billed? | Meaning and what to do |
 |---|---|---|
-| `400` | no | Bad input (bad ASIN format, unknown geo, missing required param). NOT billed. |
+| `400` | no | Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed. |
 | `401` | - | Missing or invalid API key on the keyed path. |
 | `402` | - | Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path it means the account balance is exhausted. |
 | `403` | - | Account disabled, or no active subscription plan. |
 | `404` | **yes** | The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo. |
 | `413` | - | Too many items in a batch request. |
-| `429` | - | Per-second rate limit exceeded for the plan. Back off and retry. |
+| `429` | no | Per-second rate limit exceeded for the plan (`code: rate_limited`, `Retry-After: 1`). NOT billed. Back off and retry. |
 | `500` | no | Internal error. NOT billed. |
 | `502` | no | Bad gateway. NOT billed. Same class as 503: retry with backoff. |
 | `503` | no | Temporary failure on our side. NOT billed. Safe and correct to retry. |

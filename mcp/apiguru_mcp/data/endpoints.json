@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.52",
+    "version": "1.1.53",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -87,13 +87,13 @@
     "geo_default": "US",
     "sample_asin": "B09DJLW458",
     "error_semantics": {
-      "400": "Bad input (bad ASIN format, unknown geo, missing required param). NOT billed.",
+      "400": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
       "401": "Missing or invalid API key on the keyed path.",
       "402": "Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta[\"x402/payment\"]). On the keyed path it means the account balance is exhausted.",
       "403": "Account disabled, or no active subscription plan.",
       "404": "The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo.",
       "413": "Too many items in a batch request.",
-      "429": "Per-second rate limit exceeded for the plan. Back off and retry.",
+      "429": "Per-second rate limit exceeded for the plan (`code: rate_limited`, `Retry-After: 1`). NOT billed. Back off and retry.",
       "500": "Internal error. NOT billed.",
       "502": "Bad gateway. NOT billed. Same class as 503: retry with backoff.",
       "503": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
@@ -472,7 +472,7 @@
         "amazon_request_count": 1,
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.total_pages` says how far `page` can go. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
+      "notes": "Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages` counts more (then `pagination_note` says how to split the query). `_links.next` is the next page while there is one; a page past the end is a free 400 `page_out_of_range`. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
       "mcp_params": {
         "limit": {
           "type": "integer",
@@ -684,7 +684,7 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included.",
+      "notes": "Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0.",
       "item_pattern": "^[A-Z0-9]{10}$"
     },
     {
@@ -1240,7 +1240,7 @@
         },
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Unlike seller_profile_batch, seller_id format is not pattern-validated here. metadata.total_pages says how far page goes (48 rows a page). Invalid sort_by, price, product_condition or deal_type is a free 400 that lists the allowed values.",
+      "notes": "Unlike seller_profile_batch, seller_id format is not pattern-validated here. metadata.total_pages counts every page of the result (48 rows a page), but Amazon serves at most 7 pages of one query: metadata.reachable_pages is how far page can go, and when it is less, pagination_note says how to see the rest (min_price/max_price bands or category_id). _links.next is the next page while there is one; a page past the end is a free 400 page_out_of_range. Invalid sort_by, price, product_condition or deal_type is a free 400 that lists the allowed values.",
       "mcp_params": {
         "limit": {
           "type": "integer",

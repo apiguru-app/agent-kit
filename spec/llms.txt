@@ -48,7 +48,7 @@ No headers, no signup. Put the required value in the path (several agent fetcher
 ## Cost, keys and consent
 
 - Calls cost money after the free ones. Do not pay, or use a user's API key, without the user's consent; agree a budget and set a spend cap in your x402 client. One call costs at most $0.05.
-- An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user.
+- An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user. On a key every answer says what it cost and what is left (`X-Billed-Requests`, `X-Balance-USD`).
 - Every error is JSON with `http_status`, `billed`, `retryable` and `next_step`; retry only when `retryable` is true. A 404 (not on that marketplace) is billed; 400s and 5xx are not; a 402 means pay, send a key, or sign in.
 - A timeout on an API key or with a payment attached may still have been billed: do not repeat it automatically, ask first. Answers are fetched live from Amazon; allow 60 s.
 - Prefer the batch endpoints over loops: cheaper per item.

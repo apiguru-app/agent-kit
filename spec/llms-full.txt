@@ -66,6 +66,8 @@ The tell between them: if a URL you copied verbatim works and the same URL with 
 
 `_links` also carries `parent` when the listing has a parent ASIN -- often the next thing you want, and until an agent pointed it out, the one ASIN in neither the variation map nor the links.
 
+Paged lists (`/search`, `/v2/seller-products`) carry `_links.next` while Amazon serves another page -- in path form (`https://agent.apiguru.app/agent/v1/v2/seller-products/<seller_id>/US/2`) when the call had no filters, with the full query string when it had some, so the next page is the same list. Amazon serves at most 7 pages of one query: `metadata.reachable_pages` is the last one, and a page past it is a free 400 `page_out_of_range`. When `metadata.total_pages` is larger, `pagination_note` says how to see the rest: split the query into `min_price`/`max_price` bands or by `category_id`.
+
 `variations` is capped at 10: enough to seed traversal, and small enough not to matter on a single-product question (100 of them were half of a compact record). When the family is larger the object carries `variations_truncated: true` and a note giving both counts and how to build the rest: an array quietly shorter than its own `variations_total` is exactly what `_truncated` exists to prevent on the list endpoints. The record's `variation_summary` names every attribute value, so you rarely need the rest. `_links` is omitted when you pass `fields=`, since you asked for named keys.
 
 **A markdown link is not a URL.** If someone hands you `[https://.../B09NLCNGC7/US](https://.../B0014C0LUC/US)`, an allowlist fetcher sees only the target -- the second one -- and the text you were reading is not fetchable. Anyone passing a working call to an agent should paste it as plain text, not as a link.
@@ -84,6 +86,21 @@ curl -H 'X-API-KEY: THE_KEY_THE_USER_GAVE_YOU' \
 ```
 
 A key is 401 if it is wrong and 402 if the account is out of credit; neither is retryable. Never print the key back to the user, never write it into a file the user did not ask for, and never put it in a URL query string where it lands in shell history and server logs -- the header is the only supported place. Keys come from https://dash.apiguru.app and also work on the keyed REST base below.
+
+**What a call costs on a key.** The account is billed in requests at its plan's rate (https://dash.apiguru.app/pricing), not at the x402 prices above:
+
+- `/v2/product-details`: 1 request per call.
+- `/v2/product-reviews`: 1 request per call.
+- `/search`: 1 request per call.
+- `/product`: 1 request per item in `asins` (max 20).
+- `/stock`: 1 request per item in `asins` (max 10); `check_inventory=true` adds 1 per cart check that reads a quantity (one for `offers_count=winner` or an offer id, one per offer for `all`).
+- `/v2/best-sellers`: 1 request per call.
+- `/v2/deals`: 1 request per call.
+- `/seller-profile`: 1 request per item in `seller_ids` (max 10).
+- `/v2/seller-products`: 1 request per call.
+- `/v2/seller-reviews`: 1 request per call.
+
+Every answer on a key says what it cost and what is left, in headers: `X-Billed-Requests` (this call), `X-Balance-USD`, `X-Request-Price-USD` (the plan's rate), `X-Requests-Affordable` (how many more requests the account can pay for) and, while they last, `X-Trial-Requests-Remaining` or `X-Included-Requests-Remaining`. A 404 is billed like an answer; 400s, 429s and 5xx are not.
 
 ## What it costs and how you pay
 
@@ -221,13 +238,13 @@ Measured on the ASIN above: 2,223 bytes against 135,923 for the whole record, a 
 
 These matter for cost control — some errors bill and some do not:
 
-- **400** — Bad input (bad ASIN format, unknown geo, missing required param). NOT billed.
+- **400** — Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.
 - **401** — Missing or invalid API key on the keyed path.
 - **402** — Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path it means the account balance is exhausted.
 - **403** — Account disabled, or no active subscription plan.
 - **404** — The ASIN genuinely does not exist on that marketplace. BILLED - the lookup was performed and the bad input was the caller's. Retrying will not help; try a different geo.
 - **413** — Too many items in a batch request.
-- **429** — Per-second rate limit exceeded for the plan. Back off and retry.
+- **429** — Per-second rate limit exceeded for the plan (`code: rate_limited`, `Retry-After: 1`). NOT billed. Back off and retry.
 - **500** — Internal error. NOT billed.
 - **502** — Bad gateway. NOT billed. Same class as 503: retry with backoff.
 - **503** — Temporary failure on our side. NOT billed. Safe and correct to retry.

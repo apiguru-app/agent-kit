@@ -326,7 +326,8 @@ def build_llms_txt(spec):
         "",
         "- Calls cost money after the free ones. Do not pay, or use a user's API key, without the user's "
         f"consent; agree a budget and set a spend cap in your x402 client. One call costs at most {_usd(dearest)}.",
-        "- An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user.",
+        "- An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user. "
+        "On a key every answer says what it cost and what is left (`X-Billed-Requests`, `X-Balance-USD`).",
         "- Every error is JSON with `http_status`, `billed`, `retryable` and `next_step`; retry only when "
         "`retryable` is true. A 404 (not on that marketplace) is billed; 400s and 5xx are not; a 402 means "
         "pay, send a key, or sign in.",
@@ -349,6 +350,21 @@ def build_llms_txt(spec):
     return "\n".join(lines)
 
 
+def _keyed_cost_lines(endpoints):
+    """Requests per call on a key, one bullet per endpoint, from the spec."""
+    lines = []
+    for ep in endpoints:
+        if ep.get("count_param"):
+            cost = f"1 request per item in `{ep['count_param']}` (max {ep['max_items']})"
+        else:
+            cost = "1 request per call"
+        if ep["name"] == "offers_stock":
+            cost += ("; `check_inventory=true` adds 1 per cart check that reads a quantity (one for "
+                     "`offers_count=winner` or an offer id, one per offer for `all`)")
+        lines.append(f"- `{ep['path']}`: {cost}.")
+    return lines
+
+
 def build_llms_full_txt(spec):
     api = spec["api"]
     conventions = spec["conventions"]
@@ -356,6 +372,7 @@ def build_llms_full_txt(spec):
     agent_auth = api["auth"]["agent"]
     geos = ", ".join(spec["geos"].keys())
     cheapest, dearest = _price_range(spec)
+    endpoints = spec["endpoints"]
 
     lines = [
         f"# {api['name']}",
@@ -476,6 +493,15 @@ def build_llms_full_txt(spec):
         "often the next thing you want, and until an agent pointed it out, "
         "the one ASIN in neither the variation map nor the links.",
         "",
+        "Paged lists (`/search`, `/v2/seller-products`) carry `_links.next` while "
+        "Amazon serves another page -- in path form "
+        f"(`{api['agent_base_url']}/v2/seller-products/<seller_id>/US/2`) when the call had "
+        "no filters, with the full query string when it had some, so the next page is the "
+        "same list. Amazon serves at most 7 pages of one query: `metadata.reachable_pages` "
+        "is the last one, and a page past it is a free 400 `page_out_of_range`. When "
+        "`metadata.total_pages` is larger, `pagination_note` says how to see the rest: split "
+        "the query into `min_price`/`max_price` bands or by `category_id`.",
+        "",
         "`variations` is capped at 10: enough to seed traversal, and small "
         "enough not to matter on a single-product question (100 of them were "
         "half of a compact record). When the family is larger the object "
@@ -519,6 +545,20 @@ def build_llms_full_txt(spec):
         "URL query string where it lands in shell history and server logs -- "
         f"the header is the only supported place. Keys come from {api['base_url'].rsplit('/api', 1)[0]} "
         "and also work on the keyed REST base below.",
+        "",
+        # Keyed callers had no way to budget a job or see what was left
+        # (2026-10-11 review): the USD prices above are the x402 ones, and a
+        # key is billed in requests at the account's plan rate.
+        "**What a call costs on a key.** The account is billed in requests at its plan's rate "
+        f"({api['base_url'].rsplit('/api', 1)[0]}/pricing), not at the x402 prices above:",
+        "",
+        *_keyed_cost_lines(endpoints),
+        "",
+        "Every answer on a key says what it cost and what is left, in headers: `X-Billed-Requests` "
+        "(this call), `X-Balance-USD`, `X-Request-Price-USD` (the plan's rate), `X-Requests-Affordable` "
+        "(how many more requests the account can pay for) and, while they last, "
+        "`X-Trial-Requests-Remaining` or `X-Included-Requests-Remaining`. A 404 is billed like an answer; "
+        "400s, 429s and 5xx are not.",
         "",
         "## What it costs and how you pay",
         "",
