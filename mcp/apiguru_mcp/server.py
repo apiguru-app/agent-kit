@@ -95,7 +95,8 @@ marketplaces. Data is fetched at request time, not served from a cache.
 
 Choosing a tool:
 - One ASIN, full record            -> product_details
-- Many ASINs (up to 20)            -> product_details_batch (cheaper per item)
+- Many ASINs (up to 20)            -> product_details_batch (no ranks,
+                                      category path or merchant id)
 - Reviews and rating breakdown     -> product_reviews
 - Keyword discovery                -> search
 - Offers, buy box, live stock      -> offers_stock
@@ -108,7 +109,10 @@ Rules that will save you money and failed calls:
 - Pass an ASIN (10 characters) or an Amazon product URL; lower case is
   fine. A URL's domain sets the marketplace unless `geo` says otherwise;
   what was rewritten is listed under `_input_interpreted`.
-- Prefer the batch tools over looping single-item tools.
+- Prefer the batch tools over looping single-item tools: fewer calls,
+  and cheaper per item without an account. For best-seller ranks,
+  category path or merchant id use product_details per ASIN; the batch
+  record does not carry them.
 - product_details and product_details_batch return a COMPACT record by
   default and list what they left out under `_omitted_fields`. Ask for more
   with fields="tech_specs,product_information" or compact=false. The full

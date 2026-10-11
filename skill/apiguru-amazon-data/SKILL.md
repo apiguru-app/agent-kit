@@ -89,7 +89,7 @@ it retries only unbilled failures and explains every status.
 | Need | Endpoint |
 |---|---|
 | Everything about one ASIN | `/v2/product-details` |
-| Many ASINs (≤20) | `/product?asins=A,B,C` — **cheaper per item, use this for >1** |
+| Many ASINs (≤20) | `/product?asins=A,B,C` — **one call for many; no ranks, category path or merchant id** |
 | Reviews, rating, "customers say" | `/v2/product-reviews` |
 | Find products by keyword | `/search?query=...` |
 | Offers, buy box, live stock (≤10) | `/stock?asins=...` |
@@ -273,7 +273,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.53"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.54"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -290,10 +290,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.53"] } } }
+  "args": ["apiguru-mcp==1.1.54"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.53"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.54"]`.
 
 Whichever you choose:
 

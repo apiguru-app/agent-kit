@@ -17,14 +17,18 @@ Generated from the API spec - do not edit by hand.
 | `/v2/seller-products` | $0.003 per call |
 | `/v2/seller-reviews` | $0.003 per call |
 
-Batch endpoints are billed per item and are cheaper per item than the
-single-item equivalents. Always prefer them for more than one item.
+Batch endpoints are billed per item. Without a key they are cheaper per item
+than the single-item equivalents; on a key a `/product` ASIN costs the same
+one request as `/v2/product-details`, so the batch saves calls, not money.
+Prefer them for more than one item, except that the `/product` record has
+no best-seller ranks, category path or merchant id: for those, call
+`/v2/product-details` per ASIN.
 
 ## What each status means, and whether it costs money
 
 | Status | Billed? | Meaning and what to do |
 |---|---|---|
-| `400` | no | Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed. |
+| `400` | no | Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed. |
 | `401` | - | Missing or invalid API key on the keyed path. |
 | `402` | - | Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path it means the account balance is exhausted. |
 | `403` | - | Account disabled, or no active subscription plan. |
@@ -33,9 +37,9 @@ single-item equivalents. Always prefer them for more than one item.
 | `429` | no | Per-second rate limit exceeded for the plan (`code: rate_limited`, `Retry-After: 1`). NOT billed. Back off and retry. |
 | `500` | no | Internal error. NOT billed. |
 | `502` | no | Bad gateway. NOT billed. Same class as 503: retry with backoff. |
-| `503` | no | Temporary failure on our side. NOT billed. Safe and correct to retry. |
-| `504` | no | Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds. |
-| `timeout` | - | No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early. |
+| `503` | no | Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry. |
+| `504` | no | Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner. |
+| `timeout` | - | No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s). |
 
 ## Retry policy
 

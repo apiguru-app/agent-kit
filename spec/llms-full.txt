@@ -100,7 +100,7 @@ A key is 401 if it is wrong and 402 if the account is out of credit; neither is 
 - `/v2/seller-products`: 1 request per call.
 - `/v2/seller-reviews`: 1 request per call.
 
-Every answer on a key says what it cost and what is left, in headers: `X-Billed-Requests` (this call), `X-Balance-USD`, `X-Request-Price-USD` (the plan's rate), `X-Requests-Affordable` (how many more requests the account can pay for) and, while they last, `X-Trial-Requests-Remaining` or `X-Included-Requests-Remaining`. A 404 is billed like an answer; 400s, 429s and 5xx are not.
+Every answer on a key says what it cost and what is left, in headers: `X-Billed-Requests` (this call), `X-Balance-USD`, `X-Request-Price-USD` (the plan's rate), `X-Requests-Affordable` (how many more requests the account can pay for) and, while they last, `X-Trial-Requests-Remaining` or `X-Included-Requests-Remaining`. A 404 is billed like an answer; 400s, 429s and 5xx are not. `/product` costs the same per ASIN on a key as `/v2/product-details`, and its record lacks best-seller ranks, category path and merchant id: for a catalogue that needs those, call `/v2/product-details` per ASIN. The key goes in the header only; `?api_key=` in a URL is refused with a free 400 `api_key_in_query`.
 
 ## What it costs and how you pay
 
@@ -172,16 +172,20 @@ Use these to plan a job at zero cost before committing to a paid call:
 
 ## Endpoints
 
-- **`GET /v2/product-details`** — Full product detail for a single ASIN. Required: `asin`. Price: $0.003 per call.
-- **`GET /v2/product-reviews`** — Customer reviews for a single ASIN. Required: `asin`. Price: $0.003 per call.
-- **`GET /search`** — Search Amazon products by keyword. Required: `query`. Price: $0.003 per call.
-- **`GET /product`** — Product detail for up to 20 ASINs in one call. Required: `asins`. Price: $0.0024 per item (max 20).
-- **`GET /stock`** — Live offers and inventory for up to 10 ASINs. Required: `asins`. Price: $0.0045 per item (max 10).
-- **`GET /v2/best-sellers`** — Best-seller rankings for a category. Required: none. Price: $0.003 per call.
-- **`GET /v2/deals`** — Current Amazon deals with filters. Required: none. Price: $0.003 per call.
-- **`GET /seller-profile`** — Seller profiles for up to 10 seller IDs. Required: `seller_ids`. Price: $0.0036 per item (max 10).
-- **`GET /v2/seller-products`** — Products listed by a seller. Required: `seller_id`. Price: $0.003 per call.
-- **`GET /v2/seller-reviews`** — Feedback reviews for a seller. Required: `seller_id`. Price: $0.003 per call.
+- **`GET /v2/product-details`** — Full product detail for a single ASIN. Required: `asin`. Price: $0.003 per call. `fields=` returns only the keys you name.
+- **`GET /v2/product-reviews`** — Customer reviews for a single ASIN. Required: `asin`. Price: $0.003 per call. Options: `from_rating`, `to_rating`. `from_rating` / `to_rating` (1-5) pick the star range.
+- **`GET /search`** — Search Amazon products by keyword. Required: `query`. Price: $0.003 per call. Options: `page`, `sort_by`, `category_id`, `min_price`, `max_price`, `product_condition`, `brand`, `seller_id`, `today_deals`, `deal_type`. `page` up to `metadata.reachable_pages` (Amazon serves 7 at most), `sort_by`, ten filters; `_links.next` is the next page.
+- **`GET /product`** — Product detail for up to 20 ASINs in one call. Required: `asins`. Price: $0.0024 per item (max 20). App record: no best-seller ranks, category path or merchant id (use product_details for those).
+- **`GET /stock`** — Live offers and inventory for up to 10 ASINs. Required: `asins`. Price: $0.0045 per item (max 10). Options: `check_inventory`, `offers_count`, `condition`. `check_inventory=true` adds each offer's stock quantity (a billed cart check per offer); `offers_count=winner` keeps only the buy-box offer.
+- **`GET /v2/best-sellers`** — Best-seller rankings for a category. Required: none. Price: $0.003 per call. Options: `category`, `subcategory_code`, `page`. `category` (slug or name), `subcategory_code`, `page` 1-5 (50 rows each).
+- **`GET /v2/deals`** — Current Amazon deals with filters. Required: none. Price: $0.003 per call. Options: `offset`, `categories`, `brands`, `min_product_star_rating`, `min_price`, `max_price`, `min_discount`, `max_discount`, `prime_exclusive`, `prime_early_access`. `categories`, `brands` (ids from `available_filters`), price and discount bounds, `offset` (`next_offset`).
+- **`GET /seller-profile`** — Seller profiles for up to 10 seller IDs. Required: `seller_ids`. Price: $0.0036 per item (max 10). Each row has `status`: ok, not_found (billed) or unavailable (retry it).
+- **`GET /v2/seller-products`** — Products listed by a seller. Required: `seller_id`. Price: $0.003 per call. Options: `query`, `page`, `sort_by`, `category_id`, `min_price`, `max_price`, `product_condition`, `brand`, `today_deals`, `deal_type`. `page` up to `metadata.reachable_pages`, `sort_by`, the search filters; `_links.next`; no single sort order lists a whole storefront (`coverage_note`).
+- **`GET /v2/seller-reviews`** — Feedback reviews for a seller. Required: `seller_id`. Price: $0.003 per call. Options: `page`, `from_rating`, `to_rating`. `page`, `from_rating` / `to_rating`.
+
+Two answer shapes, for history's sake. The v2 endpoints answer `{success, data, request_id}`; `/stock`, `/product` and `/seller-profile` answer `{success, results, request_id, ...}` with one row per item, and on a key `billable_requests_count`. Both carry `_links`. Every answer that reached the data layer has the same id in the `X-Request-Id` header and the body's `request_id`: quote it when you report a problem.
+
+**A storefront is not one list.** Amazon counts and orders a seller's products differently per sort order, and no order holds all of them: on one store the default (relevance) order counted 321 products and repeated some across its pages while NEWEST counted 1,898; on another the two orders shared 90 of 161 products. To list a whole storefront, page through `sort_by=RELEVANCE` and `sort_by=NEWEST`, split a store larger than 336 products (7 pages of 48) into `min_price`/`max_price` bands, and dedupe by `asin`; page 1 says so in `coverage_note`. An empty storefront (`note`) looks the same for a seller with no listings and for an id that is not a seller: `/seller-profile` tells them apart.
 
 ## Reading list results without drowning in them
 
@@ -238,7 +242,7 @@ Measured on the ASIN above: 2,223 bytes against 135,923 for the whole record, a 
 
 These matter for cost control — some errors bill and some do not:
 
-- **400** — Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.
+- **400** — Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.
 - **401** — Missing or invalid API key on the keyed path.
 - **402** — Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta["x402/payment"]). On the keyed path it means the account balance is exhausted.
 - **403** — Account disabled, or no active subscription plan.
@@ -247,9 +251,9 @@ These matter for cost control — some errors bill and some do not:
 - **429** — Per-second rate limit exceeded for the plan (`code: rate_limited`, `Retry-After: 1`). NOT billed. Back off and retry.
 - **500** — Internal error. NOT billed.
 - **502** — Bad gateway. NOT billed. Same class as 503: retry with backoff.
-- **503** — Temporary failure on our side. NOT billed. Safe and correct to retry.
-- **504** — Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.
-- **timeout** — No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.
+- **503** — Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.
+- **504** — Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.
+- **timeout** — No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).
 
 **Retry policy:** Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
 

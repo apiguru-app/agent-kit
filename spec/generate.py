@@ -305,7 +305,11 @@ def build_llms_txt(spec):
         "",
     ]
     for ep in spec["endpoints"]:
-        lines.append(f"- `{ep['path']}` ({ep['name']}): {ep['summary']}. {price_label(ep)}.")
+        # The parameter that changes what a call returns, named here: an
+        # agent reading only this file could not learn that /stock returns a
+        # stock number at all (2026-10-11).
+        hint = f" {ep['llms_hint']}" if ep.get("llms_hint") else ""
+        lines.append(f"- `{ep['path']}` ({ep['name']}): {ep['summary']}. {price_label(ep)}.{hint}")
     lines += [
         "",
         "## Ways in",
@@ -332,8 +336,11 @@ def build_llms_txt(spec):
         "`retryable` is true. A 404 (not on that marketplace) is billed; 400s and 5xx are not; a 402 means "
         "pay, send a key, or sign in.",
         "- A timeout on an API key or with a payment attached may still have been billed: do not repeat it "
-        "automatically, ask first. Answers are fetched live from Amazon; allow 60 s.",
-        "- Prefer the batch endpoints over loops: cheaper per item.",
+        "automatically, ask first. Answers are fetched live from Amazon; allow 60 s (past 55 s the gateway "
+        "answers 504 `deadline_exceeded` itself, not billed).",
+        "- Prefer the batch endpoints over loops: fewer calls, and cheaper per item without a key. The "
+        "`/product` record has no best-seller ranks, category path or merchant id; use "
+        "`/v2/product-details` when you need those.",
         "- Only `agent.apiguru.app`, `mcp.apiguru.app` and `dash.apiguru.app` are involved; none of them "
         "redirects elsewhere.",
         "",
@@ -558,7 +565,10 @@ def build_llms_full_txt(spec):
         "(this call), `X-Balance-USD`, `X-Request-Price-USD` (the plan's rate), `X-Requests-Affordable` "
         "(how many more requests the account can pay for) and, while they last, "
         "`X-Trial-Requests-Remaining` or `X-Included-Requests-Remaining`. A 404 is billed like an answer; "
-        "400s, 429s and 5xx are not.",
+        "400s, 429s and 5xx are not. `/product` costs the same per ASIN on a key as "
+        "`/v2/product-details`, and its record lacks best-seller ranks, category path and merchant id: "
+        "for a catalogue that needs those, call `/v2/product-details` per ASIN. The key goes in the "
+        "header only; `?api_key=` in a URL is refused with a free 400 `api_key_in_query`.",
         "",
         "## What it costs and how you pay",
         "",
@@ -665,12 +675,33 @@ def build_llms_full_txt(spec):
     for ep in spec["endpoints"]:
         required = ep["input_schema"].get("required", [])
         req = ", ".join(f"`{r}`" for r in required) if required else "none"
+        # Every other parameter by name, and the one that changes the answer
+        # most: `check_inventory` and `page` were only in openapi.json, so an
+        # agent reading this file could not get a stock number or page on.
+        optional = [p for p in ep["input_schema"].get("properties", {}) if p not in required and p != "geo"]
+        options = f" Options: {', '.join(f'`{p}`' for p in optional)}." if optional else ""
+        hint = f" {ep['llms_hint']}" if ep.get("llms_hint") else ""
         lines.append(
             f"- **`GET {ep['path']}`** — {ep['summary']}. "
-            f"Required: {req}. Price: {price_label(ep)}."
+            f"Required: {req}. Price: {price_label(ep)}.{options}{hint}"
         )
 
     lines += [
+        "",
+        "Two answer shapes, for history's sake. The v2 endpoints answer `{success, data, request_id}`; "
+        "`/stock`, `/product` and `/seller-profile` answer `{success, results, request_id, ...}` with one "
+        "row per item, and on a key `billable_requests_count`. Both carry `_links`. Every answer that "
+        "reached the data layer has the same id in the `X-Request-Id` header and the body's "
+        "`request_id`: quote it when you report a problem.",
+        "",
+        "**A storefront is not one list.** Amazon counts and orders a seller's products differently per "
+        "sort order, and no order holds all of them: on one store the default (relevance) order counted 321 "
+        "products and repeated some across its pages while NEWEST counted 1,898; on another the two orders "
+        "shared 90 of 161 products. To list a whole storefront, page through `sort_by=RELEVANCE` and "
+        "`sort_by=NEWEST`, split a store larger than 336 products (7 pages of 48) into "
+        "`min_price`/`max_price` bands, and dedupe by `asin`; page 1 says so in `coverage_note`. An empty "
+        "storefront (`note`) looks the same for a seller with no listings and for an id that is not a "
+        "seller: `/seller-profile` tells them apart.",
         "",
         "## Reading list results without drowning in them",
         "",
@@ -962,8 +993,12 @@ def build_errors_md(spec):
 
     lines += [
         "",
-        "Batch endpoints are billed per item and are cheaper per item than the",
-        "single-item equivalents. Always prefer them for more than one item.",
+        "Batch endpoints are billed per item. Without a key they are cheaper per item",
+        "than the single-item equivalents; on a key a `/product` ASIN costs the same",
+        "one request as `/v2/product-details`, so the batch saves calls, not money.",
+        "Prefer them for more than one item, except that the `/product` record has",
+        "no best-seller ranks, category path or merchant id: for those, call",
+        "`/v2/product-details` per ASIN.",
         "",
         "## What each status means, and whether it costs money",
         "",

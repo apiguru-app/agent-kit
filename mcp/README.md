@@ -106,8 +106,10 @@ Streamable HTTP. Send `X-API-KEY` if you have one; omit it to go keyless.
 | `seller_products` | A seller's catalogue | $0.003 |
 | `seller_reviews` | Seller feedback | $0.003 |
 
-Prefer the batch tools over looping the single-item ones — they are cheaper per
-item and one round trip instead of N.
+Prefer the batch tools over looping the single-item ones — one round trip
+instead of N, and cheaper per item without an account. The
+`product_details_batch` record has no best-seller ranks, category path or
+merchant id; use `product_details` per ASIN when you need those.
 
 ## Error semantics worth knowing
 

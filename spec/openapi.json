@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Apiguru Amazon Data API",
-    "version": "1.1.53",
+    "version": "1.1.54",
     "summary": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 23 country marketplaces.",
     "description": "Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers, deals, seller profiles, and live offers/stock across 23 country marketplaces.\n\n## Two ways to call this API\n\n**Humans / existing customers** — send `X-API-KEY` against `https://dash.apiguru.app/api/v1`.\n\n**AI agents** — call `https://agent.apiguru.app/agent/v1` with no credentials at all. You get 3 free calls per 24h, then an HTTP 402 with a `PAYMENT-REQUIRED` challenge you settle in USDC (native USDC on each network; on Base 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) on Base mainnet (eip155:8453); also Polygon (eip155:137), Arbitrum (eip155:42161) and Avalanche (eip155:43114). No account, no API key, no subscription.\n\nAn MCP server is available at `https://mcp.apiguru.app/mcp`.\n\n## Retry policy\n\nRetry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.\n",
     "contact": {
@@ -107,7 +107,7 @@
       "get": {
         "operationId": "product_details",
         "summary": "Full product detail for a single ASIN",
-        "description": "Use for one product's current listing. Not for several ASINs (product_details_batch), seller offers or stock (offers_stock), or review text (product_reviews). Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.\n\n**Price:** $0.003 per call\n\n**Notes:** 404 means the ASIN is absent from that marketplace and IS billed. 503 is a temporary failure on our side and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it.",
+        "description": "Use for one product's current listing. Not for several ASINs (product_details_batch), seller offers or stock (offers_stock), or review text (product_reviews). Fetches the complete product record for one ASIN on one marketplace: title, price, star rating, rating count, images, description, feature bullets, variations and category.\n\n**Price:** $0.003 per call\n\n**Notes:** 404 means the ASIN is absent from that marketplace and IS billed. 503 is a temporary failure on our side and is NOT billed - retry. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. Keys of `product_information`, `tech_specs` and the other specification tables are trimmed: Amazon prints some rows twice, once with a trailing space (\"Package Dimensions \"), and the copies are merged under the clean name; when they differ the listing's own value wins (the second copy of \"ASIN\" on a variant often names the parent).",
         "tags": [
           "Amazon Data"
         ],
@@ -181,7 +181,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -271,7 +271,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -281,7 +281,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -291,7 +291,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -438,7 +438,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -528,7 +528,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -538,7 +538,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -548,7 +548,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -568,7 +568,7 @@
       "get": {
         "operationId": "search",
         "summary": "Search Amazon products by keyword",
-        "description": "Use to find products by keyword and filters. Rows are result snippets; for the authoritative record of one ASIN call product_details. Search Amazon products by keyword. Filters: page, sort_by, category_id (browse node), min_price / max_price (decimals), product_condition (NEW / USED / RENEWED), brand, seller_id, today_deals and deal_type (coupons, all_discounts, buy_more_save_more). Every answer carries filters_applied, filters_ignored (with the reason) and available_filters for that marketplace.\n\n**Price:** $0.003 per call\n\n**Notes:** Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` and `offers_count` are integers; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages` counts more (then `pagination_note` says how to split the query). `_links.next` is the next page while there is one; a page past the end is a free 400 `page_out_of_range`. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
+        "description": "Use to find products by keyword and filters. Rows are result snippets; for the authoritative record of one ASIN call product_details. Search Amazon products by keyword. Filters: page, sort_by, category_id (browse node), min_price / max_price (decimals), product_condition (NEW / USED / RENEWED), brand, seller_id, today_deals and deal_type (coupons, all_discounts, buy_more_save_more). Every answer carries filters_applied, filters_ignored (with the reason) and available_filters for that marketplace.\n\n**Price:** $0.003 per call\n\n**Notes:** Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` is an integer; `offers_count` is the \"N offers\" count a result card shows, an integer, and null when the card shows none (most cards; it used to default to 1); `product_brand` is the brand line Amazon prints above some titles (fashion and many branded listings) and null on cards without one -- product_details has `brand_name` for every ASIN; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages` counts more (then `pagination_note` says how to split the query). `_links.next` is the next page while there is one; a page past the end is a free 400 `page_out_of_range`. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
         "tags": [
           "Amazon Data"
         ],
@@ -799,7 +799,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -889,7 +889,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -899,7 +899,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -909,7 +909,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -929,7 +929,7 @@
       "get": {
         "operationId": "product_details_batch",
         "summary": "Product detail for up to 20 ASINs in one call",
-        "description": "Use to enrich a list of ASINs in one call; compare the ASINs in `results` with the ones you sent. Batch variant of product_details. Accepts a comma-separated ASIN list, deduplicates it, and fetches all of them concurrently. Far cheaper and faster than N single calls.\n\n**Price:** $0.0024 per item (max 20)\n\n**Notes:** Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help).",
+        "description": "Use to enrich a list of ASINs in one call; compare the ASINs in `results` with the ones you sent. Batch variant of product_details. Accepts a comma-separated ASIN list, deduplicates it, and fetches all of them concurrently. Far cheaper and faster than N single calls.\n\n**Price:** $0.0024 per item (max 20)\n\n**Notes:** Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help). The batch record comes from Amazon's app, not the product page: price, rating, availability, images, bullets and variants, but no best-seller ranks, no category path and no merchant (seller) id. For those call product_details per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless (x402) it is also cheaper per item.",
         "tags": [
           "Amazon Data"
         ],
@@ -1005,7 +1005,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1095,7 +1095,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1105,7 +1105,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1115,7 +1115,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1139,7 +1139,7 @@
       "get": {
         "operationId": "offers_stock",
         "summary": "Live offers and inventory for up to 10 ASINs",
-        "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.\n\n**Price:** $0.0045 per item (max 10)\n\n**Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0.",
+        "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.\n\n**Price:** $0.0045 per item (max 10)\n\n**Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0. Each offer carries `ships_from` (the \"Ships from\" name: Amazon for FBA, else the seller), `delivery_message` (the offer's own delivery promise, e.g. \"FREE delivery Friday, October 16 on orders shipped by Amazon over $35\") and `delivery_message_secondary` (the \"Or fastest delivery ...\" line), null when the offer shows none. `delivery` is the same value as `ships_from`, kept for existing integrations; it never held delivery information. A row for an ASIN that could not be answered carries `error`, `code`, `http_status`, `billed`, `retryable` and `next_step`, like a top-level error: `upstream_unavailable` (not billed, retry that ASIN), `no_offers` (\"No offers found\": the offer list holds no offer that can be bought as is -- customizable listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another listing's offers; billed like a 404). On agent.apiguru.app the answer also carries `success` and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own key only.",
         "tags": [
           "Amazon Data"
         ],
@@ -1193,7 +1193,7 @@
             "name": "check_inventory",
             "in": "query",
             "required": false,
-            "description": "Resolve the true purchasable stock quantity. Slower and bills more lookups, so leave off unless you need the number.",
+            "description": "Add each offer's purchasable stock quantity (`inventory_response`), read with a cart check. Slower, and each check that reads a quantity is billed, so leave off unless you need the number.",
             "schema": {
               "type": "boolean",
               "default": false
@@ -1241,6 +1241,9 @@
                           "condition": "New",
                           "is_buybox_winner": true,
                           "delivery": "LNA Enterprises",
+                          "ships_from": "LNA Enterprises",
+                          "delivery_message": "FREE delivery Friday, October 16",
+                          "delivery_message_secondary": "Or fastest delivery Wednesday, October 14",
                           "inventory_response": "not checked"
                         }
                       ]
@@ -1262,7 +1265,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1352,7 +1355,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1362,7 +1365,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1372,7 +1375,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1396,7 +1399,7 @@
       "get": {
         "operationId": "offers_stock_alias",
         "summary": "Live offers and inventory for up to 10 ASINs (legacy alias of /stock)",
-        "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.\n\n**Price:** $0.0045 per item (max 10)\n\n**Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0.",
+        "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.\n\n**Price:** $0.0045 per item (max 10)\n\n**Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0. Each offer carries `ships_from` (the \"Ships from\" name: Amazon for FBA, else the seller), `delivery_message` (the offer's own delivery promise, e.g. \"FREE delivery Friday, October 16 on orders shipped by Amazon over $35\") and `delivery_message_secondary` (the \"Or fastest delivery ...\" line), null when the offer shows none. `delivery` is the same value as `ships_from`, kept for existing integrations; it never held delivery information. A row for an ASIN that could not be answered carries `error`, `code`, `http_status`, `billed`, `retryable` and `next_step`, like a top-level error: `upstream_unavailable` (not billed, retry that ASIN), `no_offers` (\"No offers found\": the offer list holds no offer that can be bought as is -- customizable listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another listing's offers; billed like a 404). On agent.apiguru.app the answer also carries `success` and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own key only.",
         "tags": [
           "Amazon Data"
         ],
@@ -1450,7 +1453,7 @@
             "name": "check_inventory",
             "in": "query",
             "required": false,
-            "description": "Resolve the true purchasable stock quantity. Slower and bills more lookups, so leave off unless you need the number.",
+            "description": "Add each offer's purchasable stock quantity (`inventory_response`), read with a cart check. Slower, and each check that reads a quantity is billed, so leave off unless you need the number.",
             "schema": {
               "type": "boolean",
               "default": false
@@ -1498,6 +1501,9 @@
                           "condition": "New",
                           "is_buybox_winner": true,
                           "delivery": "LNA Enterprises",
+                          "ships_from": "LNA Enterprises",
+                          "delivery_message": "FREE delivery Friday, October 16",
+                          "delivery_message_secondary": "Or fastest delivery Wednesday, October 14",
                           "inventory_response": "not checked"
                         }
                       ]
@@ -1519,7 +1525,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1609,7 +1615,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1619,7 +1625,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1629,7 +1635,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1795,7 +1801,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1885,7 +1891,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1895,7 +1901,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1905,7 +1911,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2152,7 +2158,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2242,7 +2248,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2252,7 +2258,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2262,7 +2268,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2282,7 +2288,7 @@
       "get": {
         "operationId": "seller_profile_batch",
         "summary": "Seller profiles for up to 10 seller IDs",
-        "description": "Use to vet sellers: name, rating and feedback counts as Amazon displays them. Returns the storefront profile for each seller id: business name, rating, feedback counts, address and marketplace presence.\n\n**Price:** $0.0036 per item (max 10)\n\n**Notes:** Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (could not be retrieved right now; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund.",
+        "description": "Use to vet sellers: name, rating and feedback counts as Amazon displays them. Returns the storefront profile for each seller id: business name, rating, feedback counts, address and marketplace presence.\n\n**Price:** $0.0036 per item (max 10)\n\n**Notes:** Seller ID validation is all-or-nothing: one malformed id rejects the entire request with 400. Every row in results is an object with `status`: `ok` (the profile), `not_found` (Amazon has no page for that id on this marketplace; billed, like a 404) or `unavailable` (could not be retrieved right now; NOT billed on the keyed path, `retryable: true`). A row is never null. billable_requests_count counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so retry `unavailable` ids in a separate call rather than expecting a partial refund. On agent.apiguru.app the answer also carries `success` and `_links.self`; `billable_requests_count` is there on your own key only.",
         "tags": [
           "Amazon Data"
         ],
@@ -2380,7 +2386,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2470,7 +2476,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2480,7 +2486,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2490,7 +2496,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2514,7 +2520,7 @@
       "get": {
         "operationId": "seller_products",
         "summary": "Products listed by a seller",
-        "description": "Use to list one seller's storefront. Products listed by a seller: a storefront search. Takes the same filters as search -- query, page, sort_by, category_id, min_price / max_price, product_condition, brand, today_deals, deal_type -- and answers with filters_applied, filters_ignored and available_filters like search does.\n\n**Price:** $0.003 per call\n\n**Notes:** Unlike seller_profile_batch, seller_id format is not pattern-validated here. metadata.total_pages counts every page of the result (48 rows a page), but Amazon serves at most 7 pages of one query: metadata.reachable_pages is how far page can go, and when it is less, pagination_note says how to see the rest (min_price/max_price bands or category_id). _links.next is the next page while there is one; a page past the end is a free 400 page_out_of_range. Invalid sort_by, price, product_condition or deal_type is a free 400 that lists the allowed values.",
+        "description": "Use to list one seller's storefront. Products listed by a seller: a storefront search. Takes the same filters as search -- query, page, sort_by, category_id, min_price / max_price, product_condition, brand, today_deals, deal_type -- and answers with filters_applied, filters_ignored and available_filters like search does.\n\n**Price:** $0.003 per call\n\n**Notes:** A malformed seller_id is a free 400, as on seller_profile_batch. metadata.total_pages counts every page of the result (48 rows a page), but Amazon serves at most 7 pages of one query: metadata.reachable_pages is how far page can go, and when it is less, pagination_note says how to see the rest (min_price/max_price bands or category_id). _links.next is the next page while there is one; a page past the end is a free 400 page_out_of_range. Invalid sort_by, price, product_condition or deal_type is a free 400 that lists the allowed values. No single sort order lists a whole storefront: Amazon's relevance order (the default) can count far fewer products than the store holds and repeats products across pages, and other orders include products it leaves out (measured on one store: relevance 321, NEWEST 1,898; on another, relevance and NEWEST shared 90 of 161 products). Page 1 of a storefront without `query` carries `coverage_note` with the recipe: page through sort_by=RELEVANCE and sort_by=NEWEST, split a store larger than 336 products into min_price/max_price bands, dedupe by asin. An empty storefront carries `note`: Amazon reports 0 products for a seller with no listings on that marketplace and for an id that is not a seller alike, so check it with seller_profile_batch (`_links.seller_profile`). Rows have the search row shape: `offers_count` is null unless the card shows a count, and `product_brand` is null on most storefront cards (Amazon prints no brand line there; product_details has `brand_name`).",
         "tags": [
           "Amazon Data"
         ],
@@ -2699,7 +2705,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2789,7 +2795,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2799,7 +2805,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2809,7 +2815,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2932,7 +2938,7 @@
             }
           },
           "400": {
-            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+            "description": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3022,7 +3028,7 @@
             }
           },
           "503": {
-            "description": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
+            "description": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3032,7 +3038,7 @@
             }
           },
           "504": {
-            "description": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
+            "description": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3042,7 +3048,7 @@
             }
           },
           "timeout": {
-            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early.",
+            "description": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3092,7 +3098,7 @@
     "geo_default": "US",
     "sample_asin": "B09DJLW458",
     "error_semantics": {
-      "400": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). NOT billed.",
+      "400": "Bad input (bad ASIN format, unknown geo, missing required param), or a page past the last one Amazon serves for a list (`code: page_out_of_range`, with `reachable_pages`). On agent.apiguru.app an `api_key` in the URL is refused the same way (`code: api_key_in_query`): send it as the X-API-KEY header. NOT billed.",
       "401": "Missing or invalid API key on the keyed path.",
       "402": "Payment required. On the agent path this carries a PAYMENT-REQUIRED challenge (over MCP: an x402 PaymentRequired tool result, payable in-band via _meta[\"x402/payment\"]). On the keyed path it means the account balance is exhausted.",
       "403": "Account disabled, or no active subscription plan.",
@@ -3101,9 +3107,9 @@
       "429": "Per-second rate limit exceeded for the plan (`code: rate_limited`, `Retry-After: 1`). NOT billed. Back off and retry.",
       "500": "Internal error. NOT billed.",
       "502": "Bad gateway. NOT billed. Same class as 503: retry with backoff.",
-      "503": "Temporary failure on our side. NOT billed. Safe and correct to retry.",
-      "504": "Gateway timeout: the request ran past its deadline. NOT billed. Retry with backoff; a narrower query often succeeds.",
-      "timeout": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early."
+      "503": "Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry.",
+      "504": "Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner.",
+      "timeout": "No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s)."
     },
     "retry_policy": "Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.",
     "sample_seller_id": "A2A1RNLLUK3HYA"

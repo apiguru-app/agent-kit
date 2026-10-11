@@ -27,16 +27,16 @@ No headers, no signup. Put the required value in the path (several agent fetcher
 
 ## What each call answers
 
-- `/v2/product-details` (product_details): Full product detail for a single ASIN. $0.003 per call.
-- `/v2/product-reviews` (product_reviews): Customer reviews for a single ASIN. $0.003 per call.
-- `/search` (search): Search Amazon products by keyword. $0.003 per call.
-- `/product` (product_details_batch): Product detail for up to 20 ASINs in one call. $0.0024 per item (max 20).
-- `/stock` (offers_stock): Live offers and inventory for up to 10 ASINs. $0.0045 per item (max 10).
-- `/v2/best-sellers` (best_sellers): Best-seller rankings for a category. $0.003 per call.
-- `/v2/deals` (deals): Current Amazon deals with filters. $0.003 per call.
-- `/seller-profile` (seller_profile_batch): Seller profiles for up to 10 seller IDs. $0.0036 per item (max 10).
-- `/v2/seller-products` (seller_products): Products listed by a seller. $0.003 per call.
-- `/v2/seller-reviews` (seller_reviews): Feedback reviews for a seller. $0.003 per call.
+- `/v2/product-details` (product_details): Full product detail for a single ASIN. $0.003 per call. `fields=` returns only the keys you name.
+- `/v2/product-reviews` (product_reviews): Customer reviews for a single ASIN. $0.003 per call. `from_rating` / `to_rating` (1-5) pick the star range.
+- `/search` (search): Search Amazon products by keyword. $0.003 per call. `page` up to `metadata.reachable_pages` (Amazon serves 7 at most), `sort_by`, ten filters; `_links.next` is the next page.
+- `/product` (product_details_batch): Product detail for up to 20 ASINs in one call. $0.0024 per item (max 20). App record: no best-seller ranks, category path or merchant id (use product_details for those).
+- `/stock` (offers_stock): Live offers and inventory for up to 10 ASINs. $0.0045 per item (max 10). `check_inventory=true` adds each offer's stock quantity (a billed cart check per offer); `offers_count=winner` keeps only the buy-box offer.
+- `/v2/best-sellers` (best_sellers): Best-seller rankings for a category. $0.003 per call. `category` (slug or name), `subcategory_code`, `page` 1-5 (50 rows each).
+- `/v2/deals` (deals): Current Amazon deals with filters. $0.003 per call. `categories`, `brands` (ids from `available_filters`), price and discount bounds, `offset` (`next_offset`).
+- `/seller-profile` (seller_profile_batch): Seller profiles for up to 10 seller IDs. $0.0036 per item (max 10). Each row has `status`: ok, not_found (billed) or unavailable (retry it).
+- `/v2/seller-products` (seller_products): Products listed by a seller. $0.003 per call. `page` up to `metadata.reachable_pages`, `sort_by`, the search filters; `_links.next`; no single sort order lists a whole storefront (`coverage_note`).
+- `/v2/seller-reviews` (seller_reviews): Feedback reviews for a seller. $0.003 per call. `page`, `from_rating` / `to_rating`.
 
 ## Ways in
 
@@ -50,8 +50,8 @@ No headers, no signup. Put the required value in the path (several agent fetcher
 - Calls cost money after the free ones. Do not pay, or use a user's API key, without the user's consent; agree a budget and set a spend cap in your x402 client. One call costs at most $0.05.
 - An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user. On a key every answer says what it cost and what is left (`X-Billed-Requests`, `X-Balance-USD`).
 - Every error is JSON with `http_status`, `billed`, `retryable` and `next_step`; retry only when `retryable` is true. A 404 (not on that marketplace) is billed; 400s and 5xx are not; a 402 means pay, send a key, or sign in.
-- A timeout on an API key or with a payment attached may still have been billed: do not repeat it automatically, ask first. Answers are fetched live from Amazon; allow 60 s.
-- Prefer the batch endpoints over loops: cheaper per item.
+- A timeout on an API key or with a payment attached may still have been billed: do not repeat it automatically, ask first. Answers are fetched live from Amazon; allow 60 s (past 55 s the gateway answers 504 `deadline_exceeded` itself, not billed).
+- Prefer the batch endpoints over loops: fewer calls, and cheaper per item without a key. The `/product` record has no best-seller ranks, category path or merchant id; use `/v2/product-details` when you need those.
 - Only `agent.apiguru.app`, `mcp.apiguru.app` and `dash.apiguru.app` are involved; none of them redirects elsewhere.
 
 ## More
