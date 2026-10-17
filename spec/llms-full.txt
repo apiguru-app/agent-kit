@@ -38,7 +38,28 @@ Copy one, change the value at the end, fetch it. Every one of these is a complet
 
 ## When free calls run out
 
-Free calls are counted per client. If you get a 402 you have used the free allowance for whichever client you are; the request itself was fine. Settle the attached x402 challenge, send an API key as `X-API-KEY`, or come back after the window rolls.
+Free calls are counted per client. If you get a 402 you have used the free allowance for whichever client you are; the request itself was fine. Settle the attached x402 challenge, connect the user's account (next section), send an API key as `X-API-KEY`, or come back after the window rolls.
+
+## Connect the user's account (no wallet, no key to paste)
+
+Without a wallet you do not need the user to find and paste an API key. Ask for a connection code, show them one link, and pick up your own credential once they approve -- the way command-line tools sign in (OAuth 2.0 device authorization, RFC 8628). Every keyless 402 carries these two URLs as `connect_account`.
+
+```bash
+curl -X POST https://agent.apiguru.app/agent/v1/device/code
+# -> {"device_code": "...", "user_code": "WDJB-MJHT", "interval": 5, "expires_in": 900,
+#     "verification_uri_complete": "https://dash.apiguru.app/link?code=WDJB-MJHT..."}
+# Show the user verification_uri_complete. They sign in (or sign up) and approve.
+curl -X POST https://agent.apiguru.app/agent/v1/device/token -d device_code=THE_DEVICE_CODE
+# -> 400 {"error": "authorization_pending"} until they approve, then
+# -> 200 {"access_token": "agt_...", "token_type": "Bearer", "header": "X-API-KEY"}
+curl -H 'X-API-KEY: agt_...' \
+  'https://agent.apiguru.app/agent/v1/v2/product-details/B09DJLW458/US'
+```
+
+- Poll no faster than `interval`; `slow_down` asks for 5 seconds more. `access_denied`: the user declined -- ask before starting again. `expired_token`: the code lapsed (15 minutes) or was already used; start again. GET works for both URLs if your client cannot POST.
+- The credential is yours and shown once: keep it like a password, never in a URL, a log or back in the chat. Calls bill the account that approved it, free trial requests first. The user can disconnect it at https://dash.apiguru.app/link at any time; it then answers 401 `invalid_agent_credential`.
+- It is accepted wherever an API key is: `X-API-KEY` or `Authorization: Bearer` here, and `X-API-KEY` on the keyed REST base and the MCP server.
+- Tell the user what the connection is for before you show the link. Approving gives this agent the use of their account.
 
 ## Clients that cannot send headers, or lose the query string
 
@@ -147,7 +168,7 @@ const r = await fetchWithPayment("https://agent.apiguru.app/agent/v1/v2/product-
 
 Keep the spend control: it caps what one 402 can take from the wallet. Batch endpoints bill per item (so up to $0.05 in one call); check `X-Price-Next-Call` or `/.well-known/x402` before raising the cap.
 
-No wallet and no way to get one? An API key from https://dash.apiguru.app/register comes with free trial calls and bills a normal account instead; MCP clients such as claude.ai and ChatGPT sign in through https://mcp.apiguru.app/account and never touch x402.
+No wallet and no way to get one? Connect the user's account with one link ("Connect the user's account" above), or use an API key from https://dash.apiguru.app/register, which comes with free trial calls and bills a normal account instead; MCP clients such as claude.ai and ChatGPT sign in through https://mcp.apiguru.app/account and never touch x402.
 
 ## Free forever, never metered
 

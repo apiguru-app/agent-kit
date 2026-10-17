@@ -320,6 +320,10 @@ def build_llms_txt(spec):
         "and sign in.",
         "- **HTTP, no account**: the URLs above. After the free calls, a 402 carries an x402 challenge "
         "(`PAYMENT-REQUIRED` header) that any x402 client pays and retries.",
+        f"- **HTTP, the user's account, no key to paste**: `POST {api['agent_base_url']}/device/code`, show the "
+        "user the `verification_uri_complete` it returns (they sign in or sign up and approve), poll "
+        f"`{api['agent_base_url']}/device/token` with the `device_code`, then send the `access_token` as "
+        "`X-API-KEY`. Every keyless 402 carries the same as `connect_account`.",
         "- **HTTP, with an API key**: the same URLs with the header `X-API-KEY` (never in the query string).",
         f"- **Machine-readable**: OpenAPI {api['openapi_url']}; prices and schemas, free: `{root}/.well-known/x402`.",
         "",
@@ -330,6 +334,8 @@ def build_llms_txt(spec):
         "",
         "- Calls cost money after the free ones. Do not pay, or use a user's API key, without the user's "
         f"consent; agree a budget and set a spend cap in your x402 client. One call costs at most {_usd(dearest)}.",
+        "- Connecting the user's account bills it once they approve: say what it is for before you show "
+        "them the link, and keep the `access_token` like a password.",
         "- An API key goes only in the `X-API-KEY` header: never in a URL, a log, a file, or back to the user. "
         "On a key every answer says what it cost and what is left (`X-Billed-Requests`, `X-Balance-USD`).",
         "- Every error is JSON with `http_status`, `billed`, `retryable` and `next_step`; retry only when "
@@ -440,8 +446,43 @@ def build_llms_full_txt(spec):
         "",
         "Free calls are counted per client. If you get a 402 you have used "
         "the free allowance for whichever client you are; the request itself "
-        "was fine. Settle the attached x402 challenge, send an API key as "
-        "`X-API-KEY`, or come back after the window rolls.",
+        "was fine. Settle the attached x402 challenge, connect the user's "
+        "account (next section), send an API key as `X-API-KEY`, or come back "
+        "after the window rolls.",
+        "",
+        "## Connect the user's account (no wallet, no key to paste)",
+        "",
+        "Without a wallet you do not need the user to find and paste an API "
+        "key. Ask for a connection code, show them one link, and pick up your "
+        "own credential once they approve -- the way command-line tools sign "
+        "in (OAuth 2.0 device authorization, RFC 8628). Every keyless 402 "
+        "carries these two URLs as `connect_account`.",
+        "",
+        "```bash",
+        f"curl -X POST {api['agent_base_url']}/device/code",
+        "# -> {\"device_code\": \"...\", \"user_code\": \"WDJB-MJHT\", \"interval\": 5, \"expires_in\": 900,",
+        "#     \"verification_uri_complete\": \"https://dash.apiguru.app/link?code=WDJB-MJHT...\"}",
+        "# Show the user verification_uri_complete. They sign in (or sign up) and approve.",
+        f"curl -X POST {api['agent_base_url']}/device/token -d device_code=THE_DEVICE_CODE",
+        "# -> 400 {\"error\": \"authorization_pending\"} until they approve, then",
+        "# -> 200 {\"access_token\": \"agt_...\", \"token_type\": \"Bearer\", \"header\": \"X-API-KEY\"}",
+        "curl -H 'X-API-KEY: agt_...' \\",
+        f"  '{api['agent_base_url']}/v2/product-details/{conventions['sample_asin']}/US'",
+        "```",
+        "",
+        "- Poll no faster than `interval`; `slow_down` asks for 5 seconds more. "
+        "`access_denied`: the user declined -- ask before starting again. "
+        "`expired_token`: the code lapsed (15 minutes) or was already used; "
+        "start again. GET works for both URLs if your client cannot POST.",
+        "- The credential is yours and shown once: keep it like a password, never "
+        "in a URL, a log or back in the chat. Calls bill the account that "
+        "approved it, free trial requests first. The user can disconnect it at "
+        "https://dash.apiguru.app/link at any time; it then answers 401 "
+        "`invalid_agent_credential`.",
+        "- It is accepted wherever an API key is: `X-API-KEY` or `Authorization: "
+        "Bearer` here, and `X-API-KEY` on the keyed REST base and the MCP server.",
+        "- Tell the user what the connection is for before you show the link. "
+        "Approving gives this agent the use of their account.",
         "",
         "## Clients that cannot send headers, or lose the query string",
         "",
@@ -639,10 +680,11 @@ def build_llms_full_txt(spec):
         "call); check `X-Price-Next-Call` or `/.well-known/x402` before raising "
         "the cap.",
         "",
-        "No wallet and no way to get one? An API key from "
-        "https://dash.apiguru.app/register comes with free trial calls and bills "
-        "a normal account instead; MCP clients such as claude.ai and ChatGPT sign "
-        "in through https://mcp.apiguru.app/account and never touch x402.",
+        "No wallet and no way to get one? Connect the user's account with one "
+        "link (\"Connect the user's account\" above), or use an API key from "
+        "https://dash.apiguru.app/register, which comes with free trial calls "
+        "and bills a normal account instead; MCP clients such as claude.ai and "
+        "ChatGPT sign in through https://mcp.apiguru.app/account and never touch x402.",
         "",
         "## Free forever, never metered",
         "",
