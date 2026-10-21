@@ -325,6 +325,14 @@ def build_llms_txt(spec):
         f"`{api['agent_base_url']}/device/token` with the `device_code`, then send the `access_token` as "
         "`X-API-KEY`. Every keyless 402 carries the same as `connect_account`.",
         "- **HTTP, with an API key**: the same URLs with the header `X-API-KEY` (never in the query string).",
+        # The path the first agent-built subscription took (2026-10-16..19):
+        # the agent signed its user up, put the dashboard key in a scheduled
+        # job, and the user picked a plan when the trial ran out.
+        "- **A job that repeats** (watching sellers, prices or rankings on a schedule): use the user's "
+        "account. They sign up at https://dash.apiguru.app/register (free trial requests included) and copy "
+        "the API key from their dashboard; monthly plans from $25 for 10,000 requests "
+        "(https://dash.apiguru.app/pricing) cost less per request than paying per call. A recipe for "
+        "watching a storefront is in the full guide.",
         f"- **Machine-readable**: OpenAPI {api['openapi_url']}; prices and schemas, free: `{root}/.well-known/x402`.",
         "",
         # Kept here, not only in the full guide: skill and MCP catalogues
@@ -744,6 +752,25 @@ def build_llms_full_txt(spec):
         "`min_price`/`max_price` bands, and dedupe by `asin`; page 1 says so in `coverage_note`. An empty "
         "storefront (`note`) looks the same for a seller with no listings and for an id that is not a "
         "seller: `/seller-profile` tells them apart.",
+        "",
+        "## Recipe: watch a seller's storefront on a schedule",
+        "",
+        "A daily job that lists each seller's Amazon storefront and reports what changed: new products, "
+        "products gone, price moves.",
+        "",
+        "1. Run it on the user's account, not on free calls: a job that repeats needs `X-API-KEY` (or the "
+        "account connected as above). On a key each page is billed as one request at the plan's rate "
+        "(https://dash.apiguru.app/pricing).",
+        f"2. For each seller id, fetch `{api['agent_base_url']}/v2/seller-products/<seller_id>/<geo>` and "
+        "follow `_links.next` until there is none or `metadata.reachable_pages` is reached (7 at most). For "
+        "a store larger than one sort order shows, page `sort_by=NEWEST` as well and split it into "
+        "`min_price`/`max_price` bands, as above; dedupe by `asin`.",
+        "3. Keep `asin`, `product_title` and `product_price` from each run and compare with the last one.",
+        "4. Optional: `/seller-profile/<id>,<id>,.../<geo>` (up to 10 sellers per call) for each seller's "
+        "rating and feedback count, and `/v2/seller-reviews` for new feedback.",
+        "",
+        "A seller with seven pages costs seven requests a run, so ten sellers once a day is about 2,100 "
+        "requests a month. Answers are fetched live: once a day is enough for a storefront.",
         "",
         "## Reading list results without drowning in them",
         "",

@@ -208,6 +208,17 @@ Two answer shapes, for history's sake. The v2 endpoints answer `{success, data, 
 
 **A storefront is not one list.** Amazon counts and orders a seller's products differently per sort order, and no order holds all of them: on one store the default (relevance) order counted 321 products and repeated some across its pages while NEWEST counted 1,898; on another the two orders shared 90 of 161 products. To list a whole storefront, page through `sort_by=RELEVANCE` and `sort_by=NEWEST`, split a store larger than 336 products (7 pages of 48) into `min_price`/`max_price` bands, and dedupe by `asin`; page 1 says so in `coverage_note`. An empty storefront (`note`) looks the same for a seller with no listings and for an id that is not a seller: `/seller-profile` tells them apart.
 
+## Recipe: watch a seller's storefront on a schedule
+
+A daily job that lists each seller's Amazon storefront and reports what changed: new products, products gone, price moves.
+
+1. Run it on the user's account, not on free calls: a job that repeats needs `X-API-KEY` (or the account connected as above). On a key each page is billed as one request at the plan's rate (https://dash.apiguru.app/pricing).
+2. For each seller id, fetch `https://agent.apiguru.app/agent/v1/v2/seller-products/<seller_id>/<geo>` and follow `_links.next` until there is none or `metadata.reachable_pages` is reached (7 at most). For a store larger than one sort order shows, page `sort_by=NEWEST` as well and split it into `min_price`/`max_price` bands, as above; dedupe by `asin`.
+3. Keep `asin`, `product_title` and `product_price` from each run and compare with the last one.
+4. Optional: `/seller-profile/<id>,<id>,.../<geo>` (up to 10 sellers per call) for each seller's rating and feedback count, and `/v2/seller-reviews` for new feedback.
+
+A seller with seven pages costs seven requests a run, so ten sellers once a day is about 2,100 requests a month. Answers are fetched live: once a day is enough for a storefront.
+
 ## Reading list results without drowning in them
 
 A full page from `/search` is up to 48 results and about 54 KB of JSON. Over MCP the list tools (`search`, `best_sellers`, `deals`, `seller_products`, `seller_reviews`) answer with the first **10 rows as light records** by default, which is around 7 KB and fits inline. Three ways to change that:
