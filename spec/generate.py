@@ -323,7 +323,8 @@ def build_llms_txt(spec):
         f"- **HTTP, the user's account, no key to paste**: `POST {api['agent_base_url']}/device/code`, show the "
         "user the `verification_uri_complete` it returns (they sign in or sign up and approve), poll "
         f"`{api['agent_base_url']}/device/token` with the `device_code`, then send the `access_token` as "
-        "`X-API-KEY`. Every keyless 402 carries the same as `connect_account`.",
+        "`X-API-KEY`. Every keyless 402 carries the same as `connect_account`. Only the user can approve; "
+        "a script that runs with nobody to approve uses an API key.",
         "- **HTTP, with an API key**: the same URLs with the header `X-API-KEY` (never in the query string).",
         # The path the first agent-built subscription took (2026-10-16..19):
         # the agent signed its user up, put the dashboard key in a scheduled
@@ -478,6 +479,11 @@ def build_llms_full_txt(spec):
         f"  '{api['agent_base_url']}/v2/product-details/{conventions['sample_asin']}/US'",
         "```",
         "",
+        "- Only the user can approve, signed in to their account. Opening the "
+        "link yourself, or with a browser tool, approves nothing: send it to "
+        "them and wait. A job that runs unattended (cron, CI) with nobody to "
+        "approve should not poll at all -- ask the user once for an API key "
+        "and send it as `X-API-KEY`.",
         "- Poll no faster than `interval`; `slow_down` asks for 5 seconds more. "
         "`access_denied`: the user declined -- ask before starting again. "
         "`expired_token`: the code lapsed (15 minutes) or was already used; "

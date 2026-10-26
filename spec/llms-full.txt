@@ -56,6 +56,7 @@ curl -H 'X-API-KEY: agt_...' \
   'https://agent.apiguru.app/agent/v1/v2/product-details/B09DJLW458/US'
 ```
 
+- Only the user can approve, signed in to their account. Opening the link yourself, or with a browser tool, approves nothing: send it to them and wait. A job that runs unattended (cron, CI) with nobody to approve should not poll at all -- ask the user once for an API key and send it as `X-API-KEY`.
 - Poll no faster than `interval`; `slow_down` asks for 5 seconds more. `access_denied`: the user declined -- ask before starting again. `expired_token`: the code lapsed (15 minutes) or was already used; start again. GET works for both URLs if your client cannot POST.
 - The credential is yours and shown once: keep it like a password, never in a URL, a log or back in the chat. Calls bill the account that approved it, free trial requests first. The user can disconnect it at https://dash.apiguru.app/link at any time; it then answers 401 `invalid_agent_credential`.
 - It is accepted wherever an API key is: `X-API-KEY` or `Authorization: Bearer` here, and `X-API-KEY` on the keyed REST base and the MCP server.
