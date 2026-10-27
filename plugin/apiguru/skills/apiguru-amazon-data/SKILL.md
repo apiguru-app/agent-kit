@@ -4,6 +4,7 @@ description: Live Amazon marketplace data from Apiguru (a paid third-party API, 
 license: MIT
 compatibility: Needs Python 3.10+ and outbound HTTPS to agent.apiguru.app and dash.apiguru.app only. Reads no environment variables and no local files except an API-key file the user names.
 allowed-tools: Bash(python3:*) Bash(python:*) Read
+permissions: ["network: HTTPS to agent.apiguru.app and dash.apiguru.app only", "file_read: only a key file the user names"]
 homepage: https://github.com/apiguru-app/agent-kit
 metadata: {"openclaw": {"emoji": "📦", "homepage": "https://github.com/apiguru-app/agent-kit", "requires": {"anyBins": ["python3", "python"]}}}
 ---
@@ -82,7 +83,8 @@ The script then sends it as `X-API-KEY` to `https://dash.apiguru.app/api/v1`
 followed. Calls bill that account.
 
 `scripts/probe.py` wraps all of this. Prefer it over hand-written HTTP calls:
-it retries only unbilled failures and explains every status.
+it retries only unbilled failures, never repeats a keyed call that got no
+answer, and explains every status.
 
 ## Choosing an endpoint
 
@@ -207,10 +209,13 @@ Pick (Amazon renamed that slot to "Overall Pick"); `is_amazon_choice` and
 - **`503`** — a temporary Apiguru-side failure. **Not billed.** Retry with
   backoff. `500`, `502` and `504` are the same class: not billed, retry.
 - **`429`** — rate limited. Back off, then retry.
-- **no answer** (your client timed out) — keyless, nothing was billed; retry.
-  **With an API key the call may still have finished and been billed**, so it
-  is not repeated automatically: tell the user and retry only if they agree.
-  Some marketplaces answer more slowly; allow 60s before giving up.
+- **no answer** (your client timed out, or the connection dropped) — keyless,
+  nothing was billed; retry. **With an API key the call may still have
+  finished and been billed**, so it is not repeated automatically: tell the
+  user and retry only if they agree. The one exception is a call that never
+  left the machine (the host name did not resolve, or the connection was
+  refused): nothing was billed, and the body says so. Some marketplaces
+  answer more slowly; allow 60s before giving up.
 - **`400`** — your input was wrong (bad ASIN format, unknown geo, missing
   required parameter). Not billed. Fix the input; do not retry unchanged.
 - **`402`** — free probes spent. **Stop and ask the user** (see "Costs and
@@ -218,7 +223,8 @@ Pick (Amazon renamed that slot to "Overall Pick"); `is_amazon_choice` and
 
 So: **retry `429`, `500`, `502`, `503`, `504` and keyless timeouts (unless the
 body says `retryable: false`); never retry `400`, `402`, `404` or `413`, and
-never repeat a timed-out keyed call without the user's say-so.**
+never repeat a timed-out keyed call, or one whose connection dropped, without
+the user's say-so.**
 `scripts/probe.py` does exactly this. Its exit status tells a job what
 happened: `0` usable answer, `1` HTTP error or a body reporting failure,
 `2` input rejected before any request, `3` a batch with some failed rows.
@@ -273,7 +279,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.57"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.58"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -290,10 +296,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.57"] } } }
+  "args": ["apiguru-mcp==1.1.58"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.57"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.58"]`.
 
 Whichever you choose:
 
@@ -330,15 +336,16 @@ So if a field is empty, mistyped, welded together or simply missing:
 - **Preferred, if you have a GitHub account** — open an issue at
   https://github.com/apiguru-app/agent-kit/issues. A thread there can hold a
   reply and a fix gets linked back to it.
-- **No GitHub account? Use the wall** — one unauthenticated POST, never
-  billed, no signup:
+- **No GitHub account? Use the wall** — the script's `feedback` command, never
+  billed, no signup, no key:
 
   ```bash
-  curl -X POST https://dash.apiguru.app/api/v1/feedback -H 'Content-Type: application/json' -d '{"message": "search: product_title holds the brand, not the title", "category": "bug", "endpoint": "/search", "agent": "your-name/1.0"}'
+  python3 scripts/probe.py feedback --message "search: product_title holds the brand, not the title" --category bug --endpoint /search --agent your-name/1.0
   ```
 
-  `category` is one of `bug`, `wish`, `praise`, `question`, `other`. Add
-  `"contact"` if you want a reply — it is shown publicly on the wall.
+  It sends that text, and nothing else, to `https://dash.apiguru.app/api/v1/feedback`.
+  `--category` is one of `bug`, `wish`, `praise`, `question`, `other`. Add
+  `--contact` if you want a reply — it is shown publicly on the wall.
 
   **The wall is public, so send only what the user has agreed to, and only
   about the API:** the tool, the parameters, the field, what you expected and

@@ -13,7 +13,10 @@ refused, so an API key cannot be carried to a third host by a redirect.
 
 This script never pays. A 402 is reported and the script exits; it contains
 no wallet, no x402 client and no automatic retry with payment. Whether to
-spend money is the user's decision.
+spend money is the user's decision. On an API key a call that got no answer
+(a timeout or a dropped connection) is never repeated: it may already be
+billed, so the script stops and says so. Only answered, unbilled statuses
+(429 and 5xx) are retried on a key.
 
 A key is never taken from the command line, from the environment, or from any
 file the user did not name -- a value in `argv` is visible in shell history and
@@ -54,10 +57,12 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import http.client
 import json
 import math
 import pathlib
 import re
+import socket
 import stat
 import sys
 import time
@@ -79,7 +84,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.57"
+SKILL_VERSION = "1.1.58"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -579,10 +584,12 @@ def request(path: str, params: dict[str, str], api_key: str | None, retries: int
                 last_error = answer
                 continue
             return answer
-        except (TimeoutError, urllib.error.URLError, OSError) as exc:
+        except (TimeoutError, urllib.error.URLError, OSError, http.client.HTTPException) as exc:
             # socket.timeout is TimeoutError since 3.10; URLError wraps the
-            # rest (and is itself an OSError). A refused redirect lands here
-            # too and is final: retrying would repeat the refusal.
+            # rest (and is itself an OSError). A connection dropped while the
+            # answer was read arrives unwrapped (RemoteDisconnected,
+            # IncompleteRead). A refused redirect lands here too and is
+            # final: retrying would repeat the refusal.
             reason = getattr(exc, "reason", exc)
             text = str(reason)
             if "refused a" in text and "redirect" in text:
@@ -594,19 +601,28 @@ def request(path: str, params: dict[str, str], api_key: str | None, retries: int
                     or "timed out" in text.lower():
                 last_error = transport_error(
                     "client_timeout", f"no response within {TIMEOUT_SECONDS}s: {text}")
-                if api_key:
-                    # On a key the API may still finish after this client gave
-                    # up, and bill the account for it. Repeating the call on
-                    # our own could charge twice (ClawHub audit, 2026-09-30),
-                    # so the decision goes back to the user.
-                    last_error[1].update(
-                        billed="unknown", retryable=False,
-                        next_step=("The API may have answered after this client stopped waiting, and "
-                                   "on an API key that call is billed. Do not repeat it automatically: "
-                                   "tell the user, and retry only if they agree."))
-                    return last_error
             else:
                 last_error = transport_error("connection_failed", f"connection failed: {text}")
+            if api_key:
+                # On a key the API bills a call when its answer is ready, just
+                # before sending it, so a timeout or a connection dropped after
+                # the request went out may already be billed. Repeating it on
+                # our own could charge twice (ClawHub audits: timeouts
+                # 2026-09-30, dropped connections 2026-10-27), so a keyed call
+                # is never repeated here; the decision goes back to the user.
+                if isinstance(reason, (socket.gaierror, ConnectionRefusedError)):
+                    # The name did not resolve or nothing accepted the
+                    # connection: the request never left this machine.
+                    last_error[1]["next_step"] = (
+                        "The API never received this call, so nothing was billed. "
+                        "It is safe to run it again.")
+                else:
+                    last_error[1].update(
+                        billed="unknown", retryable=False,
+                        next_step=("The API may have answered and billed this call before the answer "
+                                   "was lost. Do not repeat it automatically: tell the user, and retry "
+                                   "only if they agree."))
+                return last_error
             if attempt < retries:
                 delay = 2**attempt
                 print(f"  [{last_error[1]['code']}] not billed, retrying in {delay}s "
@@ -636,8 +652,8 @@ def explain(status: int, headers: dict, keyed: bool = False) -> None:
               + (f" (a paid call would cost {note})" if note else ""), file=sys.stderr)
 
     messages = {
-        0: ("No HTTP answer (timeout or connection failure). Keyless: not billed. With an API key a "
-            "timed-out call may have been billed and is not retried; see the body."),
+        0: ("No HTTP answer (timeout or connection failure). Keyless: not billed. With an API key the "
+            "call may have been billed and is not retried; see the body."),
         402: (
             "Payment required: the free probes for this machine are spent. "
             "This script does not pay. Stop and ask the user how to proceed: "

@@ -39,11 +39,11 @@ no best-seller ranks, category path or merchant id: for those, call
 | `502` | no | Bad gateway. NOT billed. Same class as 503: retry with backoff. |
 | `503` | no | Temporary failure on our side (`code: upstream_unavailable`). NOT billed. Safe and correct to retry. |
 | `504` | no | Gateway timeout: no answer within 55 s, so agent.apiguru.app stopped the request before it was billed (`code: deadline_exceeded`). NOT billed. Retry once; a batch with fewer items answers sooner. |
-| `timeout` | - | No response before your own client's deadline. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still complete after your client gave up, and is then billed like any answered call. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s). |
+| `timeout` | - | No response before your own client's deadline, or the connection dropped before the answer arrived. A keyless call without a payment is never billed. On an API key, or with an x402 payment attached, the request may still have completed, and is then billed like any answered call: do not repeat it automatically, ask the user. Some marketplaces answer more slowly than others; allow 60s rather than retrying early (agent.apiguru.app answers a 504 itself at 55 s). |
 
 ## Retry policy
 
-Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A client-side timeout on a key or a payment may have completed and been billed; allow 60s before retrying it. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
+Retry 429, 500, 502, 503 and 504 with backoff -- none of them are billed -- unless the error body says `retryable: false`. A call on a key or a payment that got no answer (a client-side timeout or a dropped connection) may have completed and been billed: do not repeat it automatically; tell the user and retry only if they agree. Allow 60s before treating a slow call as lost. Never retry 400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change the answer.
 
 Concretely (the same set `scripts/probe.py` retries):
 
@@ -52,8 +52,8 @@ RETRYABLE = {429, 500, 502, 503, 504}   # answered, and not billed
 for attempt in range(4):
     try:
         status, body = call(..., timeout=60)
-    except TimeoutError:
-        if api_key:                  # may have finished and billed after we gave up:
+    except OSError:                  # timeout or dropped connection: no answer
+        if api_key:                  # may have finished and billed before it was lost:
             raise                    # stop, tell the user, retry only if they agree
         status, body = 0, None       # keyless and unpaid: never billed
     if (status in RETRYABLE or status == 0) and (body or {}).get('retryable') is not False:
@@ -64,9 +64,12 @@ for attempt in range(4):
 
 A body's `retryable` flag wins over the status table: a 5xx whose
 cause is permanent says `retryable: false` and is not worth repeating.
-A timeout is different: on an API key (or with an x402 payment attached)
-the request may still complete after your client gave up, so it is never
-retried automatically -- `scripts/probe.py` reports it and stops.
+A call with no answer is different: after a timeout or a dropped
+connection on an API key (or with an x402 payment attached) the request
+may still have completed and been billed, so it is never retried
+automatically -- `scripts/probe.py` reports it and stops. Only a call
+that never left the machine (the host name did not resolve, or the
+connection was refused) is known to be unbilled.
 
 ## Free probes
 

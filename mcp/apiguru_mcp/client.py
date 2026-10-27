@@ -561,25 +561,37 @@ async def _fetch(
     async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True, transport=transport) as client:
         try:
             response = await client.get(url, params=encoded, headers=headers)
-        except httpx.TimeoutException as exc:
-            if keyed or payment is not None:
-                raise ApiguruError(
-                    f"Request to {path} got no answer within {TIMEOUT.read:.0f}s. This endpoint fetches "
-                    "live data from Amazon and can be slow under load.",
-                    billed="unknown", retryable=True,
-                    next_step=("It may still have completed and been charged; retrying fetches again. "
-                               f"Check recent usage at {DASH} before retrying anything costly."),
-                ) from exc
-            raise ApiguruError(
-                f"Request to {path} got no answer within {TIMEOUT.read:.0f}s. This endpoint fetches "
-                "live data from Amazon and can be slow under load.",
-                billed=False, retryable=True,
-                next_step="Retry; a keyless call without a payment is never charged.",
-            ) from exc
-        except httpx.HTTPError as exc:
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+            # No connection was made, so the API never saw the call.
             raise ApiguruError(
                 f"Could not reach the Apiguru API{exception_text(exc, f'GET {path}') or '.'}",
-                billed=False, retryable=True, next_step="Retry shortly.",
+                billed=False, retryable=True,
+                next_step="The API never received this call, so nothing was charged. Retry shortly.",
+            ) from exc
+        except httpx.HTTPError as exc:
+            # A read timeout, or a connection dropped after the request went
+            # out. On a key or a payment the backend charges a call when its
+            # answer is ready, just before sending it, so this one may be
+            # charged; repeating it could charge twice (ClawHub audit,
+            # 2026-10-27), and the user decides.
+            timed_out = isinstance(exc, httpx.TimeoutException)
+            message = (
+                f"Request to {path} got no answer within {TIMEOUT.read:.0f}s. This endpoint fetches "
+                "live data from Amazon and can be slow under load."
+                if timed_out else
+                f"The connection to the Apiguru API dropped before the answer arrived"
+                f"{exception_text(exc, f'GET {path}') or '.'}"
+            )
+            if keyed or payment is not None:
+                raise ApiguruError(
+                    message, billed="unknown", retryable=False,
+                    next_step=("It may have completed and been charged before the answer was lost. "
+                               "Do not repeat it automatically: tell the user, and retry only if they "
+                               f"agree. Recent usage is listed at {DASH}."),
+                ) from exc
+            raise ApiguruError(
+                message, billed=False, retryable=True,
+                next_step="Retry; a keyless call without a payment is never charged.",
             ) from exc
 
     status = response.status_code
