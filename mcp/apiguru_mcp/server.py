@@ -114,9 +114,11 @@ Rules that will save you money and failed calls:
   category path or merchant id use product_details per ASIN; the batch
   record does not carry them.
 - product_details and product_details_batch return a COMPACT record by
-  default and list what they left out under `_omitted_fields`. Ask for more
-  with fields="tech_specs,product_information" or compact=false. The full
-  record is ~75 KB; do not request it unless you need it.
+  default and list what they left out under `_omitted_fields`. Both carry
+  weight and dimension, and the brand (`brand_name` on product_details).
+  Ask for more with fields= (product_details: "tech_specs,product_information";
+  batch: "product_attributes") or compact=false. The full record is ~75 KB;
+  do not request it unless you need it.
 - Variants come as `variation_summary`: the attributes that vary, their
   values, the sibling count and this ASIN's own values. The ASIN-keyed maps
   (`variation`, `product_variations`) can be 50-130 KB on big families;

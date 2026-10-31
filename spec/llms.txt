@@ -30,7 +30,7 @@ No headers, no signup. Put the required value in the path (several agent fetcher
 - `/v2/product-details` (product_details): Full product detail for a single ASIN. $0.003 per call. `fields=` returns only the keys you name.
 - `/v2/product-reviews` (product_reviews): Customer reviews for a single ASIN. $0.003 per call. `from_rating` / `to_rating` (1-5) pick the star range.
 - `/search` (search): Search Amazon products by keyword. $0.003 per call. `page` up to `metadata.reachable_pages` (Amazon serves 7 at most), `sort_by`, ten filters; `_links.next` is the next page.
-- `/product` (product_details_batch): Product detail for up to 20 ASINs in one call. $0.0024 per item (max 20). App record: no best-seller ranks, category path or merchant id (use product_details for those).
+- `/product` (product_details_batch): Product detail for up to 20 ASINs in one call. $0.0024 per item (max 20). App record: no best-seller ranks, category path or merchant id (use product_details for those); compact rows carry brand, weight and dimension.
 - `/stock` (offers_stock): Live offers and inventory for up to 10 ASINs. $0.0045 per item (max 10). `check_inventory=true` adds each offer's stock quantity (a billed cart check per offer); `offers_count=winner` keeps only the buy-box offer.
 - `/v2/best-sellers` (best_sellers): Best-seller rankings for a category. $0.003 per call. `category` (slug or name), `subcategory_code`, `page` 1-5 (50 rows each).
 - `/v2/deals` (deals): Current Amazon deals with filters. $0.003 per call. `categories`, `brands` (ids from `available_filters`), price and discount bounds, `offset` (`next_offset`).

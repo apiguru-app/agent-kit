@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.58",
+    "version": "1.1.59",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -566,20 +566,20 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help). The batch record comes from Amazon's app, not the product page: price, rating, availability, images, bullets and variants, but no best-seller ranks, no category path and no merchant (seller) id. For those call product_details per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless (x402) it is also cheaper per item.",
+      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help). The batch record comes from Amazon's app, not the product page: price, rating, availability, images, bullets and variants, but no best-seller ranks, no category path and no merchant (seller) id. For those call product_details per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit, value} and dimension {length, width, height, unit, raw} in product_details' shape, read from the row's product_attributes (package dimensions first); outside amazon.com Amazon's app prints centimetres under an inches label, so there dimension.unit is cm while raw keeps Amazon's text.",
       "mcp_params": {
         "compact": {
           "type": "boolean",
           "default": true,
-          "description": "Return the compact record (about 4 KB: identity, price, rating, availability, bullets, category, offer, buy box). false returns the full record (about 75 KB, includes from_manufacturer, tech_specs, product_information, product_reviews)."
+          "description": "Return the compact record (about 2-7 KB a row: title, brand, price, availability, rating summary, bullets, weight, dimension, variation_summary). false returns the full app record (15-150 KB a row: the product_attributes and product_details spec tables, images, the variation maps)."
         },
         "fields": {
           "type": "string",
-          "description": "Comma-separated top-level fields to return instead of the compact set, e.g. \"tech_specs,product_information\". Any response lists what it left out under _omitted_fields."
+          "description": "Comma-separated top-level fields to return instead of the compact set, e.g. \"weight,dimension,brand\" or \"product_attributes\" (the whole spec table). Any response lists what it left out under _omitted_fields."
         }
       },
       "item_pattern": "^[A-Z0-9]{10}$",
-      "llms_hint": "App record: no best-seller ranks, category path or merchant id (use product_details for those)."
+      "llms_hint": "App record: no best-seller ranks, category path or merchant id (use product_details for those); compact rows carry brand, weight and dimension."
     },
     {
       "name": "offers_stock",

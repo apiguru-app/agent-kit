@@ -30,7 +30,9 @@ requiring the user to act:
     python probe.py capabilities                      # prices, the free-probe policy and
                                                       # THIS caller's remaining probes; free
     python probe.py product-details --asin B09DJLW458 --geo US
-    python probe.py product --asins B09DJLW458,B0BSHF7WHW --geo DE
+    python probe.py product --asins B09DJLW458,B0BSHF7WHW --geo DE --compact
+                                                      # one light row per ASIN, with
+                                                      # brand, weight and dimension
     python probe.py search --query "wireless earbuds" --geo UK --limit 10 --compact
     python probe.py best-sellers --category fashion --subcategory-code "women's shoes"
     python probe.py deals --geo DE --min-discount 30 --param categories=Elektronik
@@ -84,7 +86,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.58"
+SKILL_VERSION = "1.1.59"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -827,7 +829,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check-inventory", dest="check_inventory", action="store_true")
     parser.add_argument("--today-deals", dest="today_deals", action="store_true")
     parser.add_argument("--compact", action="store_true",
-                        help="Light rows only (the REST default is the full row).")
+                        help="Light rows only (the REST default is the full row). On `product` "
+                             "each row keeps title, brand, price, availability, bullets, "
+                             "weight and dimension.")
     # The API grows faster than this flag list; an argparse that did not know
     # a parameter used to mean the caller could not send it at all.
     parser.add_argument("--param", action="append", default=[], metavar="NAME=VALUE",

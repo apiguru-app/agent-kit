@@ -16,6 +16,7 @@ known without promising a shape the upstream does not guarantee.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, create_model
@@ -39,10 +40,13 @@ COMPACT_PRODUCT_FIELDS: tuple[str, ...] = (
 # above, a compact batch row kept `asin`, `currency`, `condition` and
 # `variation_summary` and nothing else: an agent called the default record
 # "almost empty" and paid for a second call naming the fields (2026-10-02).
+# `brand`, `weight` and `dimension` are not upstream keys: batch_specs() lifts
+# them out of the row's specification attributes (see below).
 COMPACT_BATCH_FIELDS: tuple[str, ...] = (
-    "asin", "title", "price", "prime_price", "basis_price", "basis_price_label",
+    "asin", "title", "brand", "price", "prime_price", "basis_price", "basis_price_label",
     "savings_percentage", "currency", "condition", "availability", "is_best_seller",
     "product_reviews", "deal_type", "delivery", "product_info", "description",
+    "weight", "dimension",
     "url", "details_url", "variation_summary", "error", "status",
 )
 
@@ -97,6 +101,152 @@ def project_record(record: dict[str, Any], *, compact: bool, fields: list[str],
     return out
 
 
+# --- batch rows: brand, weight and dimension ---------------------------------
+#
+# product_details carries `brand_name`, `weight` and `dimension`, parsed from
+# the product page. A batch row holds the same facts only inside
+# `product_attributes` (5-7 KB of id/label/value rows, labels in the
+# marketplace's language) and the `product_details` strings, neither of them
+# in the compact set. An agent building a catalogue with landed costs found
+# "no weight or brand in the compact record" and paid for the same ASINs a
+# second time with fields= (2026-10-31). So they are lifted to the top level,
+# in product_details' shape, keyed by attribute id: ids do not change with the
+# marketplace's language (`item_weight` is "Artikelgewicht" on amazon.de).
+#
+# What the ids hold, measured on 32 rows over 18 marketplaces (2026-10-31):
+# - `item_weight` and the weight after ";" in `item_size_weight` always agree.
+#   `itemWeight` does not: 4 of 15 non-US rows print the gram figure under an
+#   ounces label (amazon.ae "20 ounces" for a 20 g cable), so it is read on
+#   amazon.com only, and last.
+# - `item_size_weight` ("Product Dimensions" or "Package Dimensions",
+#   "L x W x H inches; weight") labels its numbers inches on every marketplace,
+#   but outside amazon.com they are centimetres: HERO8 B08C7FBW4N is "4 x 6 x 8
+#   inches" on amazon.com and "10.16 x 15.24 x 20.32 inches" on amazon.de, and
+#   the explicit `item_dimensions` rows say centimetres for the same numbers
+#   (amazon.in 150 x 2 x 2, amazon.ca 180 x 1.15 x 0.62). amazon.co.jp prints
+#   "cm" itself. `raw` keeps Amazon's text; `unit` says what it means.
+# The order follows product_details: item weight before package weight,
+# package dimensions before product, then item dimensions.
+
+_WEIGHT_IDS = ("item_weight", "item_package_weight")
+_US_ONLY_WEIGHT_IDS = ("itemWeight",)
+_PACKAGE_DIMENSION_IDS = ("getDimensionValues_package_length_and_package_width_and_package_height",)
+_COMBINED_ID = "item_size_weight"
+_ITEM_DIMENSION_IDS = ("getDimensionValues_item_length_and_item_width_and_item_height", "item_dimensions")
+_BRAND_IDS = ("brand", "brand_name")
+
+# product_details' unit codes (lb, oz, kg, g / in, cm, mm, ft), plus metres.
+_WEIGHT_UNITS = {"pound": "lb", "lb": "lb", "ounce": "oz", "oz": "oz",
+                 "kilogram": "kg", "kg": "kg", "gram": "g", "g": "g"}
+_LENGTH_UNITS = {"inch": "in", "in": "in", "centimeter": "cm", "centimetre": "cm", "cm": "cm",
+                 "millimeter": "mm", "millimetre": "mm", "mm": "mm",
+                 "foot": "ft", "feet": "ft", "ft": "ft", "meter": "m", "metre": "m", "m": "m"}
+_NUMBER = r"(\d+(?:[.,]\d+)*)"
+_WEIGHT_RE = re.compile(_NUMBER + r"\s*(pounds?|lbs?|ounces?|oz|kilograms?|kg|grams?|g)\b", re.I)
+_DIMENSIONS_RE = re.compile(
+    _NUMBER + r"\s*[x×]\s*" + _NUMBER + r"\s*[x×]\s*" + _NUMBER
+    + r"\s*(inch(?:es)?|in|cent[ie]met(?:er|re)s?|cm|mill[ie]met(?:er|re)s?|mm|feet|foot|ft|met(?:er|re)s?|m)\b",
+    re.I)
+# Bidi marks and stray whitespace Amazon leaves in attribute text.
+_INVISIBLE = dict.fromkeys(map(ord, "‎‏‪‬﻿"), None)
+
+
+def _clean(value: Any) -> str:
+    return value.translate(_INVISIBLE).strip() if isinstance(value, str) else ""
+
+
+def _number(text: str) -> int | float | None:
+    if "," in text and "." in text:
+        text = text.replace(",", "")
+    elif "," in text:
+        text = text.replace(",", "") if re.fullmatch(r"\d{1,3}(?:,\d{3})+", text) else text.replace(",", ".")
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return int(value) if value.is_integer() else value
+
+
+def _unit(word: str, table: dict[str, str]) -> str | None:
+    word = word.lower()
+    if word in table:
+        return table[word]
+    for suffix in ("es", "s"):
+        if word.endswith(suffix) and word[: -len(suffix)] in table:
+            return table[word[: -len(suffix)]]
+    return None
+
+
+def _weight(raw: str) -> dict[str, Any] | None:
+    match = _WEIGHT_RE.search(raw)
+    if not match:
+        return None
+    return {"raw": raw, "unit": _unit(match.group(2), _WEIGHT_UNITS), "value": _number(match.group(1))}
+
+
+def _dimension(raw: str, *, metric_inches: bool = False) -> dict[str, Any] | None:
+    match = _DIMENSIONS_RE.search(raw)
+    if not match:
+        return None
+    length, width, height = (_number(match.group(i)) for i in (1, 2, 3))
+    unit = _unit(match.group(4), _LENGTH_UNITS)
+    if metric_inches and unit == "in":
+        unit = "cm"
+    return {"height": height, "length": length, "raw": raw, "unit": unit, "width": width}
+
+
+EMPTY_WEIGHT: dict[str, Any] = {"raw": "", "unit": None, "value": None}
+EMPTY_DIMENSION: dict[str, Any] = {"height": None, "length": None, "raw": "", "unit": None, "width": None}
+
+
+def batch_specs(row: dict[str, Any], country: str | None = None) -> dict[str, Any]:
+    """`brand`, `weight` and `dimension` of one batch row, from its attributes.
+
+    Shapes as product_details: `weight` {raw, unit, value}, `dimension`
+    {length, width, height, unit, raw}, empty (raw "", the rest null) when
+    the row shows none. Returns {} for a row without attributes (an error row).
+    """
+    attributes = row.get("product_attributes")
+    if not isinstance(attributes, list):
+        return {}
+    by_id: dict[str, str] = {}
+    for attribute in attributes:
+        if isinstance(attribute, dict) and isinstance(attribute.get("id"), str):
+            value = _clean(attribute.get("value"))
+            if value:
+                by_id.setdefault(attribute["id"], value)
+    us = (country or row.get("country") or "").upper() == "US"
+    combined_size, _, combined_weight = by_id.get(_COMBINED_ID, "").partition(";")
+
+    weight = None
+    for raw in [by_id.get(i, "") for i in _WEIGHT_IDS] + [combined_weight.strip()] + [
+            by_id.get(i, "") for i in _US_ONLY_WEIGHT_IDS if us]:
+        weight = _weight(raw) if raw else None
+        if weight:
+            break
+
+    dimension = None
+    candidates = [(by_id.get(i, ""), False) for i in _PACKAGE_DIMENSION_IDS]
+    candidates.append((combined_size.strip(), not us))
+    candidates += [(by_id.get(i, ""), False) for i in _ITEM_DIMENSION_IDS]
+    for raw, metric_inches in candidates:
+        dimension = _dimension(raw, metric_inches=metric_inches) if raw else None
+        if dimension:
+            break
+
+    brand = next((by_id[i] for i in _BRAND_IDS if by_id.get(i)), None)
+    return {"brand": brand, "weight": weight or dict(EMPTY_WEIGHT),
+            "dimension": dimension or dict(EMPTY_DIMENSION)}
+
+
+def _with_specs(row: Any, country: str | None) -> Any:
+    """A batch row plus batch_specs(); a key the upstream already sends wins."""
+    if not isinstance(row, dict):
+        return row
+    specs = batch_specs(row, country)
+    return {**row, **{k: v for k, v in specs.items() if k not in row}} if specs else row
+
+
 def shape_product_payload(payload: Any, *, compact: bool, fields: str | None) -> Any:
     """Apply the projection to whichever envelope the backend used.
 
@@ -111,12 +261,28 @@ def shape_product_payload(payload: Any, *, compact: bool, fields: str | None) ->
     if isinstance(payload.get("data"), dict):
         return {**payload, "data": project_record(payload["data"], compact=compact, fields=wanted)}
     if isinstance(payload.get("results"), list):
-        return {
+        country = payload.get("country_code") if isinstance(payload.get("country_code"), str) else None
+        rows = [_with_specs(item, country) for item in payload["results"]]
+        out = {
             **payload,
-            "results": [project_record(item, compact=compact, fields=wanted, compact_fields=COMPACT_BATCH_FIELDS)
-                        for item in payload["results"]],
+            "results": [project_record(row, compact=compact, fields=wanted, compact_fields=COMPACT_BATCH_FIELDS)
+                        for row in rows],
         }
+        if any(_metric_inches(row) for row in out["results"]):
+            out["_notes"] = [METRIC_INCHES_NOTE]
+        return out
     return payload
+
+
+METRIC_INCHES_NOTE = (
+    "`dimension.unit` is cm where `dimension.raw` says inches: outside amazon.com Amazon's app "
+    "prints centimetre values under an inches label. `raw` is Amazon's text, `unit` what it means.")
+
+
+def _metric_inches(row: Any) -> bool:
+    dimension = row.get("dimension") if isinstance(row, dict) else None
+    return (isinstance(dimension, dict) and dimension.get("unit") == "cm"
+            and "inch" in str(dimension.get("raw", "")).lower())
 
 
 def shape_reviews_payload(payload: Any, *, max_reviews: int | None) -> Any:

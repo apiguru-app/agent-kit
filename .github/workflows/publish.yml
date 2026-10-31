@@ -108,7 +108,7 @@ jobs:
           # A re-run ("Re-run all jobs") of a published version would retry a
           # refused publish five times and fail; the registry already has it.
           V=$(jq -r .version server.json)
-          if curl -fsS -o /dev/null "https://registry.modelcontextprotocol.io/v0/servers/app.apiguru%2Famazon-data/versions/$V"; then
+          if curl -fs -o /dev/null "https://registry.modelcontextprotocol.io/v0/servers/app.apiguru%2Famazon-data/versions/$V"; then
             echo "The MCP Registry already has $V; nothing to publish."; exit 0
           fi
           mcp-publisher login dns --domain apiguru.app --private-key "$MCP_PRIVATE_KEY"
@@ -157,7 +157,7 @@ jobs:
           # npm refuses to publish over a version it has, so a re-run of a
           # published release failed here (v1.1.57, attempt 3, 2026-10-27).
           V=$(node -p "require('./package.json').version")
-          if curl -fsS -o /dev/null "https://registry.npmjs.org/apiguru-mcp/$V"; then
+          if curl -fs -o /dev/null "https://registry.npmjs.org/apiguru-mcp/$V"; then
             echo "apiguru-mcp@$V is already on npm; nothing to publish."; exit 0
           fi
           npm publish --access public
@@ -167,6 +167,12 @@ jobs:
     # publish. Needs the repository secret CLAWHUB_TOKEN (clawhub.ai -> API tokens).
     needs: build
     runs-on: ubuntu-latest
+    # "true" once ClawHub holds this version, uploaded now or before. verify
+    # reads it: right after an upload ClawHub's API can answer 404 for the
+    # version (1.1.58 did for several minutes, 2026-10-27), when "uploaded,
+    # still being scanned" looks the same as "never uploaded".
+    outputs:
+      uploaded: ${{ steps.publish.outputs.uploaded }}
     env:
       CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
     steps:
@@ -176,22 +182,36 @@ jobs:
         with:
           node-version: "22"
       - name: Publish the skill
+        id: publish
         if: env.CLAWHUB_TOKEN != ''
         run: |
           VERSION=$(python3 -c "import json;print(json.load(open('spec/endpoints.json'))['api']['version'])")
           # ClawHub refuses a version it already has ("Version 1.1.57 already
-          # exists", re-run of 2026-10-27), so a re-run checks first.
-          if curl -fsS -o /dev/null "https://clawhub.ai/api/v1/skills/apiguru-amazon-data/versions/$VERSION"; then
-            echo "ClawHub already has $VERSION; nothing to publish."; exit 0
+          # exists", re-run of 2026-10-27). A listed one shows in the API; one
+          # still under scan only shows in that refusal.
+          if curl -fs -o /dev/null "https://clawhub.ai/api/v1/skills/apiguru-amazon-data/versions/$VERSION"; then
+            echo "ClawHub already has $VERSION; nothing to publish."
+            echo "uploaded=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           find skill plugin -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
           npx -y clawhub@latest login --token "$CLAWHUB_TOKEN" --no-input
-          npx -y clawhub@latest publish ./skill/apiguru-amazon-data --slug apiguru-amazon-data \
+          set +e
+          out=$(npx -y clawhub@latest publish ./skill/apiguru-amazon-data --slug apiguru-amazon-data \
             --name "Apiguru Amazon Data" --version "$VERSION" \
             --changelog "Release $VERSION (see GitHub)" --tags latest \
             --topics "amazon,ecommerce,product-data,scraping,x402" \
             --source-repo apiguru-app/agent-kit --source-path skill/apiguru-amazon-data \
-            --source-ref main --source-commit "$GITHUB_SHA" --no-input
+            --source-ref main --source-commit "$GITHUB_SHA" --no-input 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            case "$out" in
+              *"already exists"*) echo "ClawHub already has $VERSION (still being scanned); nothing to publish." ;;
+              *) exit "$rc" ;;
+            esac
+          fi
+          echo "uploaded=true" >> "$GITHUB_OUTPUT"
       - name: ClawHub step skipped
         if: env.CLAWHUB_TOKEN == ''
         run: echo "CLAWHUB_TOKEN not set; publish with npx clawhub locally."
@@ -204,6 +224,8 @@ jobs:
     needs: [pypi, npm, clawhub, mcp-registry]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      CLAWHUB_UPLOADED: ${{ needs.clawhub.outputs.uploaded }}
     steps:
       - uses: actions/checkout@v4
       - name: Every channel serves this version
@@ -232,10 +254,11 @@ jobs:
           check npm "curl -fsS https://registry.npmjs.org/apiguru-mcp | jq -r '.\"dist-tags\".latest'" || fail=1
           # ClawHub lists a version only after its security scans: 1.1.57 was
           # uploaded 12:24 and listed 22:48 UTC (2026-10-26), and 1.1.56 failed
-          # this job the same way. Uploaded but unlisted is a warning; a
-          # version ClawHub does not have at all still fails.
+          # this job the same way. Its API can answer 404 for a fresh upload,
+          # so "uploaded" comes from the clawhub job. Uploaded but unlisted is
+          # a warning; a version never uploaded still fails.
           check ClawHub "curl -fsS https://clawhub.ai/api/v1/skills/apiguru-amazon-data | jq -r .latestVersion.version" \
-            "curl -fsS -o /dev/null https://clawhub.ai/api/v1/skills/apiguru-amazon-data/versions/$VERSION" || fail=1
+            '[ "$CLAWHUB_UPLOADED" = true ]' || fail=1
           check "MCP Registry" "curl -fsS 'https://registry.modelcontextprotocol.io/v0/servers?search=app.apiguru/amazon-data&version=latest' | jq -r '.servers[0].server.version'" || fail=1
           check "GitHub (plugin marketplace, Gemini, npx skills)" "curl -fsS https://raw.githubusercontent.com/apiguru-app/agent-kit/main/.claude-plugin/marketplace.json | jq -r '.plugins[0].version'" || fail=1
           exit $fail

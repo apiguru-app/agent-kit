@@ -859,6 +859,21 @@ def build_llms_full_txt(spec):
         "Amazon presents them rather than merged, because different callers "
         "depend on different ones. Pick one and name it in `fields=`.",
         "",
+        "**Weight, dimensions and brand for a list of ASINs.** A catalogue or "
+        "a landed-cost estimate needs them per product, and the batch record "
+        "keeps them in its 5-7 KB `product_attributes` table. With "
+        "`compact=true` (the MCP default) every `/product` row carries them at "
+        "the top level, in the shape `/v2/product-details` uses: `brand`, "
+        "`weight` `{raw, unit, value}` and `dimension` `{length, width, "
+        "height, unit, raw}`, package dimensions first. One call for 20 ASINs "
+        "is enough; `fields=weight,dimension,brand` returns only those. "
+        "Outside amazon.com Amazon's app prints centimetres under an inches "
+        "label (`\"10.16 x 15.24 x 20.32 inches\"` on amazon.de for a camera "
+        "that is 4 x 6 x 8 inches on amazon.com), so there `dimension.unit` "
+        "is `cm` and `raw` keeps Amazon's text; the answer says so in "
+        "`_notes`. `raw` is `\"\"` and the numbers null when the listing "
+        "shows none.",
+        "",
         "## Three things about Amazon's data that mislead",
         "",
         "- **Reviews pool across the listing family, counts AND text.** Every "

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.58
+  version: 1.1.59
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -658,7 +658,10 @@ paths:
         from Amazon''s app, not the product page: price, rating, availability, images, bullets and variants,
         but no best-seller ranks, no category path and no merchant (seller) id. For those call product_details
         per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not
-        money; keyless (x402) it is also cheaper per item.'
+        money; keyless (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit,
+        value} and dimension {length, width, height, unit, raw} in product_details'' shape, read from
+        the row''s product_attributes (package dimensions first); outside amazon.com Amazon''s app prints
+        centimetres under an inches label, so there dimension.unit is cm while raw keeps Amazon''s text.'
       tags:
       - Amazon Data
       parameters:

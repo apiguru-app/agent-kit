@@ -91,7 +91,7 @@ answer, and explains every status.
 | Need | Endpoint |
 |---|---|
 | Everything about one ASIN | `/v2/product-details` |
-| Many ASINs (≤20) | `/product?asins=A,B,C` — **one call for many; no ranks, category path or merchant id** |
+| Many ASINs (≤20) | `/product?asins=A,B,C` — **one call for many; no ranks, category path or merchant id**; with `compact=true` each row has `brand`, `weight` and `dimension` |
 | Reviews, rating, "customers say" | `/v2/product-reviews` |
 | Find products by keyword | `/search?query=...` |
 | Offers, buy box, live stock (≤10) | `/stock?asins=...` |
@@ -239,8 +239,9 @@ python scripts/probe.py capabilities
 # one product
 python scripts/probe.py product-details --asin B09DJLW458 --geo US
 
-# many at once (preferred for lists)
-python scripts/probe.py product --asins B09DJLW458,B0BSHF7WHW --geo US
+# many at once (preferred for lists); --compact: one light row each, with
+# brand, weight and dimension
+python scripts/probe.py product --asins B09DJLW458,B0BSHF7WHW --geo US --compact
 
 # keyword search on amazon.co.uk
 python scripts/probe.py search --query "wireless earbuds" --geo UK
@@ -279,7 +280,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.58"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.59"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -296,10 +297,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.58"] } } }
+  "args": ["apiguru-mcp==1.1.59"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.58"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.59"]`.
 
 Whichever you choose:
 
