@@ -721,7 +721,9 @@ def build_llms_full_txt(spec):
         "pays it in-band by resending the same call with the payment in `_meta[\"x402/payment\"]`.",
         f"- [MCP server, signed in]({api['mcp_account_url']}): OAuth 2.1 for claude.ai, Claude Desktop and ChatGPT connectors; bills your Apiguru account.",
         f"- [OpenAPI spec]({api['openapi_url']}): full machine-readable schema for all {len(spec['endpoints'])} endpoints.",
-        f"- [Keyed REST API]({api['base_url']}): for existing customers, `X-API-KEY` header.",
+        f"- [Keyed REST API]({api['base_url']}): for existing customers, `X-API-KEY` header. It "
+        "returns full answers and ignores `limit`, `compact` and `fields`; send the same key to "
+        f"{api['agent_base_url']} for those.",
         f"- [Docs]({api['docs_url']}): human documentation.",
         "",
         "## Endpoints",
@@ -794,7 +796,9 @@ def build_llms_full_txt(spec):
         "",
         "Answers carry `_truncated` (how many rows the page really had) and "
         "`_omitted_fields` (what the light projection dropped), so nothing is "
-        "hidden. Over plain REST filter with `brand`, `min_price`/`max_price` "
+        "hidden. The same three work over REST on agent.apiguru.app, keyless "
+        "or with `X-API-KEY`; there the defaults are the whole page in full "
+        "rows. Over plain REST filter with `brand`, `min_price`/`max_price` "
         "and `sort_by` to keep a page small, which also makes it more "
         "relevant than paging does.",
         "",
@@ -1007,8 +1011,11 @@ def build_endpoints_md(spec):
         "",
         "Generated from the API spec - do not edit by hand.",
         "",
-        f"- Keyless base URL: `{api['agent_base_url']}`",
-        f"- Keyed base URL: `{api['base_url']}` (send `X-API-KEY`)",
+        f"- Base URL: `{api['agent_base_url']}`, keyless or with an API key in the `X-API-KEY` "
+        "header (what `scripts/probe.py` uses either way; `limit`, `compact` and `fields` apply "
+        "to both)",
+        f"- Also keyed: `{api['base_url']}` (send `X-API-KEY`; full answers, no `limit`, "
+        "`compact` or `fields`)",
         "",
         "All endpoints are `GET` with query parameters.",
         "",

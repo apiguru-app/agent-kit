@@ -2,8 +2,8 @@
 
 Generated from the API spec - do not edit by hand.
 
-- Keyless base URL: `https://agent.apiguru.app/agent/v1`
-- Keyed base URL: `https://dash.apiguru.app/api/v1` (send `X-API-KEY`)
+- Base URL: `https://agent.apiguru.app/agent/v1`, keyless or with an API key in the `X-API-KEY` header (what `scripts/probe.py` uses either way; `limit`, `compact` and `fields` apply to both)
+- Also keyed: `https://dash.apiguru.app/api/v1` (send `X-API-KEY`; full answers, no `limit`, `compact` or `fields`)
 
 All endpoints are `GET` with query parameters.
 

@@ -189,7 +189,7 @@ Use these to plan a job at zero cost before committing to a paid call:
 - [MCP server](https://mcp.apiguru.app/mcp): streamable HTTP, keyless; also installable locally (`uvx apiguru-mcp`). When the free calls run out, a tool returns an x402 PaymentRequired result; an x402-capable MCP client pays it in-band by resending the same call with the payment in `_meta["x402/payment"]`.
 - [MCP server, signed in](https://mcp.apiguru.app/account): OAuth 2.1 for claude.ai, Claude Desktop and ChatGPT connectors; bills your Apiguru account.
 - [OpenAPI spec](https://dash.apiguru.app/openapi.json): full machine-readable schema for all 10 endpoints.
-- [Keyed REST API](https://dash.apiguru.app/api/v1): for existing customers, `X-API-KEY` header.
+- [Keyed REST API](https://dash.apiguru.app/api/v1): for existing customers, `X-API-KEY` header. It returns full answers and ignores `limit`, `compact` and `fields`; send the same key to https://agent.apiguru.app/agent/v1 for those.
 - [Docs](https://github.com/apiguru-app/agent-kit#readme): human documentation.
 
 ## Endpoints
@@ -228,7 +228,7 @@ A full page from `/search` is up to 48 results and about 54 KB of JSON. Over MCP
 - `compact=false` - every field the REST API sends, including the full delivery text.
 - `fields="asin,product_title,product_price"` - only the keys you name.
 
-Answers carry `_truncated` (how many rows the page really had) and `_omitted_fields` (what the light projection dropped), so nothing is hidden. Over plain REST filter with `brand`, `min_price`/`max_price` and `sort_by` to keep a page small, which also makes it more relevant than paging does.
+Answers carry `_truncated` (how many rows the page really had) and `_omitted_fields` (what the light projection dropped), so nothing is hidden. The same three work over REST on agent.apiguru.app, keyless or with `X-API-KEY`; there the defaults are the whole page in full rows. Over plain REST filter with `brand`, `min_price`/`max_price` and `sort_by` to keep a page small, which also makes it more relevant than paging does.
 
 ### The deals feed filters by id, and tells you the ids
 

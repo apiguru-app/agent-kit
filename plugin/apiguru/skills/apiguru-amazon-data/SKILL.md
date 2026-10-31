@@ -23,8 +23,8 @@ Nothing else in this skill sends data anywhere.
 
 ## Costs and consent (read this first)
 
-- **Hosts contacted:** `agent.apiguru.app` (keyless) and `dash.apiguru.app`
-  (the keyed API, and the feedback wall, which needs no key). Nothing else.
+- **Hosts contacted:** `agent.apiguru.app` (the API, keyless or with a key)
+  and `dash.apiguru.app` (the feedback wall, which needs no key). Nothing else.
   `scripts/probe.py` has both hosts fixed in the source, reads no environment
   variables, and **refuses every redirect**, so a key cannot be carried to a
   third host by a `302`.
@@ -52,8 +52,8 @@ Nothing else in this skill sends data anywhere.
 - Do not go looking for an API key: not in the environment, not in config or
   dotfiles, not anywhere the user did not hand you deliberately. `--api-key-file`
   takes only a path the user named. Never send a key anywhere but
-  `dash.apiguru.app`, and never echo it back into the conversation, a log or a
-  command line.
+  `agent.apiguru.app` (as the `X-API-KEY` header), and never echo it back into
+  the conversation, a log or a command line.
 
 ## Getting access
 
@@ -78,9 +78,11 @@ history and the process table expose it to every other local user:
 - `--api-key-stdin` reads one line from standard input, e.g.
   `pass show apiguru | python scripts/probe.py ... --api-key-stdin`.
 
-The script then sends it as `X-API-KEY` to `https://dash.apiguru.app/api/v1`
-(same paths) and to nowhere else — redirects are refused rather than
-followed. Calls bill that account.
+The script then sends it as `X-API-KEY` to `https://agent.apiguru.app/agent/v1`
+(the same gateway and paths as keyless) and to nowhere else — redirects are
+refused rather than followed. Calls bill that account, never the free probes;
+each answer says what it cost (`X-Billed-Requests`, `X-Balance-USD`), and
+`--limit`, `--compact` and `--fields` shape it as they do a keyless one.
 
 `scripts/probe.py` wraps all of this. Prefer it over hand-written HTTP calls:
 it retries only unbilled failures, never repeats a keyed call that got no
@@ -163,8 +165,9 @@ small at the source:
 - **Ask for less.** `limit=N` caps the rows (`limit=0` for the whole page),
   `compact=true` returns light rows, and
   `fields="asin,product_title,product_price"` returns only what you name.
-  These work the same way on the REST endpoints and over MCP, on every list
-  tool: `search`, `best_sellers`, `deals`, `seller_products` and
+  These work the same way on `agent.apiguru.app` (keyless or keyed, so
+  through `probe.py` either way) and over MCP, on every list tool:
+  `search`, `best_sellers`, `deals`, `seller_products` and
   `seller_reviews`.
 - **The defaults differ, deliberately.** Over MCP a list tool returns the
   first **10 light rows** (about 7 KB) because a tool result goes straight
@@ -280,7 +283,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.59"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.60"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -297,10 +300,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.59"] } } }
+  "args": ["apiguru-mcp==1.1.60"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.59"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.60"]`.
 
 Whichever you choose:
 

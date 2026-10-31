@@ -4,12 +4,16 @@
 Standard library only. Talks to exactly two first-party hosts, both fixed
 below and never taken from the environment or from arguments:
 
-  * https://agent.apiguru.app  keyless gateway: free probes, then HTTP 402
-  * https://dash.apiguru.app   keyed API when --api-key is given, and the
-                               unauthenticated feedback wall (`feedback`)
+  * https://agent.apiguru.app  the API: keyless (free probes, then HTTP 402),
+                               or keyed when --api-key is given
+  * https://dash.apiguru.app   the unauthenticated feedback wall (`feedback`)
 
 Every request is pinned to one of those origins and redirects away from it are
 refused, so an API key cannot be carried to a third host by a redirect.
+
+A keyed call goes to the same gateway as a keyless one, so --limit, --compact
+and --fields shape it the same way. It bills the key's account (the answer's
+X-Billed-Requests and X-Balance-USD say how much), never the free probes.
 
 This script never pays. A 402 is reported and the script exits; it contains
 no wallet, no x402 client and no automatic retry with payment. Whether to
@@ -75,7 +79,10 @@ import urllib.request
 # Fixed on purpose. Making these configurable would let a poisoned
 # environment or prompt redirect requests (and an API key) elsewhere.
 KEYLESS_BASE = "https://agent.apiguru.app/agent/v1"
-KEYED_BASE = "https://dash.apiguru.app/api/v1"
+# The same gateway. dash.apiguru.app/api/v1 bills the same account, but the
+# backend behind it ignores `limit`, `compact` and `fields`: a keyed
+# `product --compact` returned 145 KB for one ASIN there, 4.7 KB here.
+KEYED_BASE = "https://agent.apiguru.app/agent/v1"
 CAPABILITIES_URL = "https://agent.apiguru.app/.well-known/x402"
 # Reports the caller's own free-probe standing without spending a probe.
 HEALTH_URL = "https://agent.apiguru.app/health"
@@ -86,7 +93,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.59"
+SKILL_VERSION = "1.1.60"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
