@@ -574,13 +574,29 @@ def shape_list_payload(
         if omitted:
             out["_omitted_fields"] = omitted
 
+    # Rows the upstream could not fetch this time (best-sellers ranks 31-50
+    # come from a second lookup, and the answer lists what it missed under
+    # `incomplete`). Those were not trimmed: a caller who asked for the whole
+    # page and got 30 of 50 was told "pass limit=50", which changes nothing.
+    incomplete = payload.get("incomplete")
+    missing = incomplete.get("missing_ranks") if isinstance(incomplete, dict) else None
+    absent = len(missing) if isinstance(missing, list) else 0
     if len(shaped) < total:
-        out["_truncated"] = {
-            "returned": len(shaped),
-            "of": total,
-            "hint": f"this page held {total} rows; pass limit={total} for all of them, "
-                    "or narrow the query with the filters this tool takes",
-        }
+        if absent and (not limit or len(shaped) < limit):
+            out["_truncated"] = {
+                "returned": len(shaped),
+                "of": total,
+                "hint": f"{absent} rows of this page could not be fetched this time; see "
+                        "`incomplete`. Repeat the same call for the full page -- a larger "
+                        "limit will not bring them back",
+            }
+        else:
+            out["_truncated"] = {
+                "returned": len(shaped),
+                "of": total,
+                "hint": f"this page held {total} rows; pass limit={total} for all of them, "
+                        "or narrow the query with the filters this tool takes",
+            }
     if compact and not wanted and shaped:
         out["_projection"] = (
             "light rows: the long delivery text is collapsed to `delivery_date`. "

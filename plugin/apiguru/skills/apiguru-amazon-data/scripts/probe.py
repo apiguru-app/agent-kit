@@ -93,7 +93,7 @@ GITHUB_ISSUES = "https://github.com/apiguru-app/agent-kit/issues"
 # Kept in step with the kit's release by spec/generate.py. It goes into the
 # User-Agent and into every feedback entry, so a report can be read against
 # the skill text that produced it.
-SKILL_VERSION = "1.1.60"
+SKILL_VERSION = "1.1.61"
 USER_AGENT = f"apiguru-skill-probe/{SKILL_VERSION}"
 
 # command -> path. Mirrors the endpoint list; see references/endpoints.md.
@@ -774,6 +774,22 @@ def cmd_capabilities() -> int:
     return EXIT_OK
 
 
+def unmangled_path(value):
+    """`--endpoint /v2/best-sellers` as it was typed.
+
+    Git Bash on Windows rewrites an argument that starts with "/" into a
+    path under its own install directory before Python sees it, so the wall
+    received "C:/Program Files/Git/v2/best-sellers". Put the path back."""
+    if not value:
+        return value
+    text = str(value).replace("\\", "/")
+    for marker in ("/Git/", "/git/"):
+        head, found, tail = text.partition(marker)
+        if found and len(head) >= 2 and head[1] == ":" and head[0].isalpha():
+            return "/" + tail
+    return value
+
+
 def cmd_feedback(args) -> int:
     """Post one entry to the public feedback wall. Free, no key, no signup."""
     if not args.message:
@@ -786,7 +802,7 @@ def cmd_feedback(args) -> int:
     payload = {
         "message": args.message,
         "category": (args.category or "other").lower(),
-        "endpoint": args.endpoint,
+        "endpoint": unmangled_path(args.endpoint),
         # The skill version rides along so a report can be read against
         # the text that produced it (an install can lag the release).
         "agent": f"{args.agent or 'apiguru-skill-probe'} (skill {SKILL_VERSION})",
