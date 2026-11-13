@@ -169,7 +169,7 @@ const r = await fetchWithPayment("https://agent.apiguru.app/agent/v1/v2/product-
 
 Keep the spend control: it caps what one 402 can take from the wallet. Batch endpoints bill per item (so up to $0.05 in one call); check `X-Price-Next-Call` or `/.well-known/x402` before raising the cap.
 
-No wallet and no way to get one? Connect the user's account with one link ("Connect the user's account" above), or use an API key from https://dash.apiguru.app/register, which comes with free trial calls and bills a normal account instead; MCP clients such as claude.ai and ChatGPT sign in through https://mcp.apiguru.app/account and never touch x402.
+No wallet and no way to get one? Connect the user's account with one link ("Connect the user's account" above), or use an API key from https://dash.apiguru.app/register?utm_source=agent&utm_campaign=llms-full, which comes with free trial calls and bills a normal account instead; MCP clients such as claude.ai and ChatGPT sign in through https://mcp.apiguru.app/account and never touch x402.
 
 ## Free forever, never metered
 

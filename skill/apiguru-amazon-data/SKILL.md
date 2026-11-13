@@ -283,7 +283,7 @@ it local, make it a controlled deployment step rather than a fetch on every
 launch:
 
 ```bash
-python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.61"
+python -m venv ~/.venvs/apiguru && ~/.venvs/apiguru/bin/pip install "apiguru-mcp==1.1.62"
 # then point the client at the binary you just reviewed and installed:
 #   "command": "/home/you/.venvs/apiguru/bin/apiguru-mcp"
 ```
@@ -300,10 +300,10 @@ from a compromised publisher account or registry.
 
 ```json
 { "mcpServers": { "apiguru": { "command": "uvx",
-  "args": ["apiguru-mcp==1.1.61"] } } }
+  "args": ["apiguru-mcp==1.1.62"] } } }
 ```
 
-or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.61"]`.
+or, with Node instead of Python, `"command": "npx", "args": ["apiguru-mcp@1.1.62"]`.
 
 Whichever you choose:
 

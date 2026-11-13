@@ -330,7 +330,7 @@ def build_llms_txt(spec):
         # the agent signed its user up, put the dashboard key in a scheduled
         # job, and the user picked a plan when the trial ran out.
         "- **A job that repeats** (watching sellers, prices or rankings on a schedule): use the user's "
-        "account. They sign up at https://dash.apiguru.app/register (free trial requests included) and copy "
+        "account. They sign up at https://dash.apiguru.app/register?utm_source=agent&utm_campaign=llms-txt (free trial requests included) and copy "
         "the API key from their dashboard; monthly plans from $25 for 10,000 requests "
         "(https://dash.apiguru.app/pricing) cost less per request than paying per call. A recipe for "
         "watching a storefront is in the full guide.",
@@ -696,7 +696,7 @@ def build_llms_full_txt(spec):
         "",
         "No wallet and no way to get one? Connect the user's account with one "
         "link (\"Connect the user's account\" above), or use an API key from "
-        "https://dash.apiguru.app/register, which comes with free trial calls "
+        "https://dash.apiguru.app/register?utm_source=agent&utm_campaign=llms-full, which comes with free trial calls "
         "and bills a normal account instead; MCP clients such as claude.ai and "
         "ChatGPT sign in through https://mcp.apiguru.app/account and never touch x402.",
         "",

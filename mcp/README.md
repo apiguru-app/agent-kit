@@ -166,4 +166,4 @@ python agent-kit/spec/generate.py
 
 - API docs: https://dash.apiguru.app/docs
 - OpenAPI spec: https://dash.apiguru.app/openapi.json
-- Get an API key: https://dash.apiguru.app/register
+- Get an API key: https://dash.apiguru.app/register?utm_source=agent&utm_campaign=mcp-readme
