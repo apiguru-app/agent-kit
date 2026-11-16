@@ -32,6 +32,8 @@ COMPACT_PRODUCT_FIELDS: tuple[str, ...] = (
     "delivery_info", "return_policy", "buybox_winner", "offer", "badges",
     "category", "category_path", "ranks",
     "about_product", "product_description", "product_overview",
+    # what the listing states under its own name (2026-11-16); null when it states none
+    "whats_in_the_box", "warranty", "ingredients",
     "product_photo", "product_url", "dimension", "weight",
     "customers_say", "variation_summary",
 )

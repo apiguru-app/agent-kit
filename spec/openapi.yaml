@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.64
+  version: 1.1.65
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -124,13 +124,17 @@ paths:
         `promotion` in the page''s own words, and `subscribe_and_save` -- `{price, price_per_unit, max_savings_price,
         max_savings_percentage}`, null when the listing has no such option. `return_policy` is the buy
         box''s Returns line ("FREE refund/replacement until Jan 31, 2027"), and `buybox_winner.seller_url`
-        is the seller''s page. `product_photos` is this listing''s whole gallery at full size, in the
-        page''s order (it used to hold one image, or thumbnails); other variants'' images stay under `variation`.
-        A page that comes back with no product on it is fetched again and, failing that, answered as the
-        unbilled 503 -- never as an empty record. Keys of `product_information`, `tech_specs` and the
-        other specification tables are trimmed: Amazon prints some rows twice, once with a trailing space
-        ("Package Dimensions "), and the copies are merged under the clean name; when they differ the
-        listing''s own value wins (the second copy of "ASIN" on a variant often names the parent).'
+        is the seller''s page. Three things a listing states are named at the top level: `whats_in_the_box`
+        (the page''s "What''s in the box" list, an array of strings), `warranty` ("1 year manufacturer")
+        and `ingredients` (the ingredient list as the page prints it); each is null when the listing states
+        none. `product_information` still holds the same rows under the page''s own labels. `product_photos`
+        is this listing''s whole gallery at full size, in the page''s order (it used to hold one image,
+        or thumbnails); other variants'' images stay under `variation`. A page that comes back with no
+        product on it is fetched again and, failing that, answered as the unbilled 503 -- never as an
+        empty record. Keys of `product_information`, `tech_specs` and the other specification tables are
+        trimmed: Amazon prints some rows twice, once with a trailing space ("Package Dimensions "), and
+        the copies are merged under the clean name; when they differ the listing''s own value wins (the
+        second copy of "ASIN" on a variant often names the parent).'
       tags:
       - Amazon Data
       parameters:
@@ -191,6 +195,10 @@ paths:
                   product_star_rating: '4.5'
                   product_num_ratings: 1284
                   return_policy: FREE refund/replacement until Jan 31, 2027
+                  whats_in_the_box:
+                  - Camera Body Only
+                  warranty: 1 year manufacturer
+                  ingredients: null
                 request_id: 0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f
         '400': &id001
           description: 'Bad input (bad ASIN format, unknown geo, missing required param), or a page past
