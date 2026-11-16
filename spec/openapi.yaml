@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.62
+  version: 1.1.63
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -427,9 +427,13 @@ paths:
         Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered
         feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` is
         an integer; `offers_count` is the "N offers" count a result card shows, an integer, and null when
-        the card shows none (most cards; it used to default to 1); `product_brand` is the brand line Amazon
-        prints above some titles (fashion and many branded listings) and null on cards without one --
-        product_details has `brand_name` for every ASIN; `product_star_rating`, `product_price` and `product_original_price`
+        the card shows none (most cards; it used to default to 1; "21+ used & new offers" reads 21); `product_minimum_offer_price`
+        is the price on the card''s "More Buying Choices" line -- the lowest among the listing''s other
+        offers, new or used -- a decimal string, null when the card shows no such line; under product_condition=USED
+        the answer carries `price_note`, which says which price is which, and offers_stock with the USED_*
+        conditions returns the used offers themselves; `product_brand` is the brand line Amazon prints
+        above some titles (fashion and many branded listings) and null on cards without one -- product_details
+        has `brand_name` for every ASIN; `product_star_rating`, `product_price` and `product_original_price`
         are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result
         carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says
         how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages`
@@ -532,9 +536,11 @@ paths:
       - name: product_condition
         in: query
         required: false
-        description: NEW, USED or RENEWED (case-insensitive). Applied with the marketplace's own condition
-          node; where a marketplace does not offer one, the answer's filters_ignored says so and available_filters
-          lists what it does offer.
+        description: 'NEW, USED or RENEWED (case-insensitive). Applied with the marketplace''s own condition
+          node; where a marketplace does not offer one, the answer''s filters_ignored says so and available_filters
+          lists what it does offer. USED lists products that have a used offer: `product_price` stays
+          the featured offer''s price (usually a new item''s) and `product_minimum_offer_price` is the
+          lowest price among the listing''s other offers.'
         schema:
           type: string
           enum:
@@ -616,6 +622,8 @@ paths:
                 - asin: B0888TJNH1
                   product_title: Womens Capri V Sporty Flip Flop
                   product_price: '24.95'
+                  product_minimum_offer_price: '22.49'
+                  offers_count: 4
                   product_star_rating: '4.5'
                   product_num_ratings: 5167
                   badges: []
@@ -746,16 +754,29 @@ paths:
       description: 'Use to compare sellers'' current offers and see who holds the buy box, and, with check_inventory,
         how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not
         for the listing''s own details (product_details). Returns the current offer list per ASIN (seller,
-        price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.
+        price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity. The
+        whole offer list comes by default; `page` returns it ten offers at a time.
 
 
         **Price:** $0.0045 per item (max 10)
 
 
-        **Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner
-        returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to
-        scope only the inventory check and return every offer. /scrape is a legacy alias for the same
-        handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page:
+        **Notes:** On an account, a call is billed per page of the offer list it delivers, plus the cart
+        checks of check_inventory. Amazon lists ten offers a page, so an ASIN with up to ten offers is
+        one request and each further page of its list is one more (a listing with 35 offers: 4). `page`
+        (1, 2, ...) returns that page alone for one request per ASIN -- page 1 is the buy-box offer and
+        the first ten of the list -- and each row then carries `page` and `total_pages`. A page past the
+        end is answered like a not-found item: code `page_out_of_range`, billed, with `total_pages` and
+        `offers_total` in the row; `total_pages` on any page says how far to go, so there is no need to
+        ask. Without `page` the whole list comes, up to 10 pages (100 offers and the buy-box offer); a
+        longer list says so in `coverage_note`, and `page=11` onward reaches the rest. `offers_total`
+        is Amazon''s own count of the offers under the condition filter, not the number returned; when
+        fewer are returned, `coverage_note` says why (a page that could not be read this time, the 10-page
+        limit, or offers that cannot be added to a cart). A condition filter covers the buy-box offer
+        too: it is in the answer only when its own condition was asked for. offers_count=winner returns
+        only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope
+        only the inventory check and return every offer. /scrape is a legacy alias for the same handler.
+        When Amazon will not return the offer list for an ASIN, the result carries source=product_page:
         the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon
         says exist) and a note; other sellers'' offers and stock are then not included. With check_inventory,
         a cart check that cannot read a quantity is retried once on another session; one that still fails
@@ -837,10 +858,22 @@ paths:
         in: query
         required: false
         description: 'Comma-separated condition filter: ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD,
-          USED_ACCEPTABLE (case-insensitive). Omit for every offer. An unknown value is a free 400 listing
-          the allowed ones; it used to be silently treated as ALL.'
+          USED_ACCEPTABLE (case-insensitive). Omit for every offer. The filter covers the buy-box offer
+          too: it is in the answer only when its own condition is among those asked for. An unknown value
+          is a free 400 listing the allowed ones; it used to be silently treated as ALL.'
         schema:
           type: string
+      - name: page
+        in: query
+        required: false
+        description: One page of each ASIN's offer list instead of the whole list. Amazon lists ten offers
+          a page, in its own order (it starts from the lowest price with delivery); page 1 also carries
+          the buy-box offer. One request per ASIN whatever the listing's size, and each row then says
+          `page` and `total_pages`. Omit for the whole list, which is one request per page of ten.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
         '200':
           description: Success.
@@ -869,6 +902,7 @@ paths:
                   condition:
                   - ALL
                   check_inventory: false
+                  page: all
                 amazon_request_count: 1
                 response_time: 2100
                 country_code: US
@@ -899,16 +933,29 @@ paths:
       description: 'Use to compare sellers'' current offers and see who holds the buy box, and, with check_inventory,
         how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not
         for the listing''s own details (product_details). Returns the current offer list per ASIN (seller,
-        price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.
+        price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity. The
+        whole offer list comes by default; `page` returns it ten offers at a time.
 
 
         **Price:** $0.0045 per item (max 10)
 
 
-        **Notes:** Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner
-        returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to
-        scope only the inventory check and return every offer. /scrape is a legacy alias for the same
-        handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page:
+        **Notes:** On an account, a call is billed per page of the offer list it delivers, plus the cart
+        checks of check_inventory. Amazon lists ten offers a page, so an ASIN with up to ten offers is
+        one request and each further page of its list is one more (a listing with 35 offers: 4). `page`
+        (1, 2, ...) returns that page alone for one request per ASIN -- page 1 is the buy-box offer and
+        the first ten of the list -- and each row then carries `page` and `total_pages`. A page past the
+        end is answered like a not-found item: code `page_out_of_range`, billed, with `total_pages` and
+        `offers_total` in the row; `total_pages` on any page says how far to go, so there is no need to
+        ask. Without `page` the whole list comes, up to 10 pages (100 offers and the buy-box offer); a
+        longer list says so in `coverage_note`, and `page=11` onward reaches the rest. `offers_total`
+        is Amazon''s own count of the offers under the condition filter, not the number returned; when
+        fewer are returned, `coverage_note` says why (a page that could not be read this time, the 10-page
+        limit, or offers that cannot be added to a cart). A condition filter covers the buy-box offer
+        too: it is in the answer only when its own condition was asked for. offers_count=winner returns
+        only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope
+        only the inventory check and return every offer. /scrape is a legacy alias for the same handler.
+        When Amazon will not return the offer list for an ASIN, the result carries source=product_page:
         the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon
         says exist) and a note; other sellers'' offers and stock are then not included. With check_inventory,
         a cart check that cannot read a quantity is retried once on another session; one that still fails
@@ -990,10 +1037,22 @@ paths:
         in: query
         required: false
         description: 'Comma-separated condition filter: ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD,
-          USED_ACCEPTABLE (case-insensitive). Omit for every offer. An unknown value is a free 400 listing
-          the allowed ones; it used to be silently treated as ALL.'
+          USED_ACCEPTABLE (case-insensitive). Omit for every offer. The filter covers the buy-box offer
+          too: it is in the answer only when its own condition is among those asked for. An unknown value
+          is a free 400 listing the allowed ones; it used to be silently treated as ALL.'
         schema:
           type: string
+      - name: page
+        in: query
+        required: false
+        description: One page of each ASIN's offer list instead of the whole list. Amazon lists ten offers
+          a page, in its own order (it starts from the lowest price with delivery); page 1 also carries
+          the buy-box offer. One request per ASIN whatever the listing's size, and each row then says
+          `page` and `total_pages`. Omit for the whole list, which is one request per page of ten.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
         '200':
           description: Success.
@@ -1022,6 +1081,7 @@ paths:
                   condition:
                   - ALL
                   check_inventory: false
+                  page: all
                 amazon_request_count: 1
                 response_time: 2100
                 country_code: US

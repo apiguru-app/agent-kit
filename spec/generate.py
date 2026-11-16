@@ -381,8 +381,13 @@ def _keyed_cost_lines(endpoints):
         else:
             cost = "1 request per call"
         if ep["name"] == "offers_stock":
-            cost += ("; `check_inventory=true` adds 1 per cart check that reads a quantity (one for "
-                     "`offers_count=winner` or an offer id, one per offer for `all`)")
+            # A page of ten offers is a request (2026-11-16: the pages of a
+            # long list now all arrive, so a 35-offer listing is 4, where
+            # this line said 1 per item).
+            cost += (" with up to ten offers, plus 1 for each further page of ten in an item's offer list "
+                     "(`page=1` or `offers_count=winner` keeps an item to one); `check_inventory=true` adds 1 "
+                     "per cart check that reads a quantity (one for `offers_count=winner` or an offer id, one "
+                     "per offer for `all`)")
         lines.append(f"- `{ep['path']}`: {cost}.")
     return lines
 

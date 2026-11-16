@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.62",
+    "version": "1.1.63",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -390,7 +390,7 @@
               "USED",
               "RENEWED"
             ],
-            "description": "NEW, USED or RENEWED (case-insensitive). Applied with the marketplace's own condition node; where a marketplace does not offer one, the answer's filters_ignored says so and available_filters lists what it does offer."
+            "description": "NEW, USED or RENEWED (case-insensitive). Applied with the marketplace's own condition node; where a marketplace does not offer one, the answer's filters_ignored says so and available_filters lists what it does offer. USED lists products that have a used offer: `product_price` stays the featured offer's price (usually a new item's) and `product_minimum_offer_price` is the lowest price among the listing's other offers."
           },
           "brand": {
             "type": "string",
@@ -463,6 +463,8 @@
             "asin": "B0888TJNH1",
             "product_title": "Womens Capri V Sporty Flip Flop",
             "product_price": "24.95",
+            "product_minimum_offer_price": "22.49",
+            "offers_count": 4,
             "product_star_rating": "4.5",
             "product_num_ratings": 5167,
             "badges": [],
@@ -474,7 +476,7 @@
         "amazon_request_count": 1,
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` is an integer; `offers_count` is the \"N offers\" count a result card shows, an integer, and null when the card shows none (most cards; it used to default to 1); `product_brand` is the brand line Amazon prints above some titles (fashion and many branded listings) and null on cards without one -- product_details has `brand_name` for every ASIN; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages` counts more (then `pagination_note` says how to split the query). `_links.next` is the next page while there is one; a page past the end is a free 400 `page_out_of_range`. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
+      "notes": "Blank values and the literal string 'null' are treated as unset. Invalid page, sort_by, price, product_condition or deal_type is a free 400 naming the parameter and the allowed values. Condition and deal refinements are per marketplace; a marketplace that lacks one gets the unfiltered feed plus an entry under filters_ignored, never a silent empty page. `product_num_ratings` is an integer; `offers_count` is the \"N offers\" count a result card shows, an integer, and null when the card shows none (most cards; it used to default to 1; \"21+ used & new offers\" reads 21); `product_minimum_offer_price` is the price on the card's \"More Buying Choices\" line -- the lowest among the listing's other offers, new or used -- a decimal string, null when the card shows no such line; under product_condition=USED the answer carries `price_note`, which says which price is which, and offers_stock with the USED_* conditions returns the used offers themselves; `product_brand` is the brand line Amazon prints above some titles (fashion and many branded listings) and null on cards without one -- product_details has `brand_name` for every ASIN; `product_star_rating`, `product_price` and `product_original_price` are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages` counts more (then `pagination_note` says how to split the query). `_links.next` is the next page while there is one; a page past the end is a free 400 `page_out_of_range`. A full page is up to 48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon's query-scoped popularity, not a category rank: a row's `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.",
       "mcp_params": {
         "limit": {
           "type": "integer",
@@ -590,7 +592,7 @@
       ],
       "method": "GET",
       "summary": "Live offers and inventory for up to 10 ASINs",
-      "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity.",
+      "description": "Use to compare sellers' current offers and see who holds the buy box, and, with check_inventory, how many units a buyer can add to the cart now. The stock number is not a sales estimate. Not for the listing's own details (product_details). Returns the current offer list per ASIN (seller, price, condition, buy-box winner) and, optionally, the actual purchasable stock quantity. The whole offer list comes by default; `page` returns it ten offers at a time.",
       "bazaar_description": "Live Amazon offer and inventory data for up to 10 ASINs: every active offer with seller, price, shipping and condition, which one holds the buy box, and optionally the real purchasable stock quantity. Built for repricing, buy-box monitoring and stock-out alerting across 23 marketplaces.",
       "price_model": "per_item",
       "unit_price_usd": "0.0045",
@@ -649,7 +651,13 @@
           },
           "condition": {
             "type": "string",
-            "description": "Comma-separated condition filter: ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD, USED_ACCEPTABLE (case-insensitive). Omit for every offer. An unknown value is a free 400 listing the allowed ones; it used to be silently treated as ALL."
+            "description": "Comma-separated condition filter: ALL, NEW, USED_LIKE_NEW, USED_VERY_GOOD, USED_GOOD, USED_ACCEPTABLE (case-insensitive). Omit for every offer. The filter covers the buy-box offer too: it is in the answer only when its own condition is among those asked for. An unknown value is a free 400 listing the allowed ones; it used to be silently treated as ALL."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "One page of each ASIN's offer list instead of the whole list. Amazon lists ten offers a page, in its own order (it starts from the lowest price with delivery); page 1 also carries the buy-box offer. One request per ASIN whatever the listing's size, and each row then says `page` and `total_pages`. Omit for the whole list, which is one request per page of ten."
           }
         },
         "required": [
@@ -684,16 +692,17 @@
           "condition": [
             "ALL"
           ],
-          "check_inventory": false
+          "check_inventory": false,
+          "page": "all"
         },
         "amazon_request_count": 1,
         "response_time": 2100,
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per lookup, which is more than one per ASIN when check_inventory is true. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0. Each offer carries `ships_from` (the \"Ships from\" name: Amazon for FBA, else the seller), `delivery_message` (the offer's own delivery promise, e.g. \"FREE delivery Friday, October 16 on orders shipped by Amazon over $35\") and `delivery_message_secondary` (the \"Or fastest delivery ...\" line), null when the offer shows none. `delivery` is the same value as `ships_from`, kept for existing integrations; it never held delivery information. A row for an ASIN that could not be answered carries `error`, `code`, `http_status`, `billed`, `retryable` and `next_step`, like a top-level error: `upstream_unavailable` (not billed, retry that ASIN), `no_offers` (\"No offers found\": the offer list holds no offer that can be bought as is -- customizable listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another listing's offers; billed like a 404). On agent.apiguru.app the answer also carries `success` and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own key only.",
+      "notes": "On an account, a call is billed per page of the offer list it delivers, plus the cart checks of check_inventory. Amazon lists ten offers a page, so an ASIN with up to ten offers is one request and each further page of its list is one more (a listing with 35 offers: 4). `page` (1, 2, ...) returns that page alone for one request per ASIN -- page 1 is the buy-box offer and the first ten of the list -- and each row then carries `page` and `total_pages`. A page past the end is answered like a not-found item: code `page_out_of_range`, billed, with `total_pages` and `offers_total` in the row; `total_pages` on any page says how far to go, so there is no need to ask. Without `page` the whole list comes, up to 10 pages (100 offers and the buy-box offer); a longer list says so in `coverage_note`, and `page=11` onward reaches the rest. `offers_total` is Amazon's own count of the offers under the condition filter, not the number returned; when fewer are returned, `coverage_note` says why (a page that could not be read this time, the 10-page limit, or offers that cannot be added to a cart). A condition filter covers the buy-box offer too: it is in the answer only when its own condition was asked for. offers_count=winner returns only the offer flagged is_buybox_winner (offers_total keeps the full count); it used to scope only the inventory check and return every offer. /scrape is a legacy alias for the same handler. When Amazon will not return the offer list for an ASIN, the result carries source=product_page: the featured (buy-box) offer read from the product page, offers_on_amazon (how many offers Amazon says exist) and a note; other sellers' offers and stock are then not included. With check_inventory, a cart check that cannot read a quantity is retried once on another session; one that still fails says so on the offer, inventory_response {\"error\": \"cart check failed\", \"code\": \"cart_check_failed\", \"retryable\": true}, is not billed, and never reads as a quantity of 0. Each offer carries `ships_from` (the \"Ships from\" name: Amazon for FBA, else the seller), `delivery_message` (the offer's own delivery promise, e.g. \"FREE delivery Friday, October 16 on orders shipped by Amazon over $35\") and `delivery_message_secondary` (the \"Or fastest delivery ...\" line), null when the offer shows none. `delivery` is the same value as `ships_from`, kept for existing integrations; it never held delivery information. A row for an ASIN that could not be answered carries `error`, `code`, `http_status`, `billed`, `retryable` and `next_step`, like a top-level error: `upstream_unavailable` (not billed, retry that ASIN), `no_offers` (\"No offers found\": the offer list holds no offer that can be bought as is -- customizable listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another listing's offers; billed like a 404). On agent.apiguru.app the answer also carries `success` and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own key only.",
       "item_pattern": "^[A-Z0-9]{10}$",
-      "llms_hint": "`check_inventory=true` adds each offer's stock quantity (a billed cart check per offer); `offers_count=winner` keeps only the buy-box offer."
+      "llms_hint": "`check_inventory=true` adds each offer's stock quantity (a billed cart check per offer); `offers_count=winner` keeps only the buy-box offer; on an account the whole offer list is one request per ten offers, and `page=1` returns the first ten for one."
     },
     {
       "name": "best_sellers",
