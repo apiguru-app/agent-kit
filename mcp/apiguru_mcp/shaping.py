@@ -25,9 +25,11 @@ from pydantic import BaseModel, ConfigDict, create_model
 COMPACT_PRODUCT_FIELDS: tuple[str, ...] = (
     "asin", "parent_asin", "product_title", "brand_name",
     "product_price", "product_original_price", "product_price_max", "prime_price", "currency",
+    # what the page shows beside the price (2026-11-16): small, and what a price question asks for
+    "discount_percentage", "product_price_per_unit", "deal_badge", "coupon", "promotion", "subscribe_and_save",
     "price_snapshot", "product_star_rating", "product_num_ratings", "review_histogram", "product_num_offers",
     "product_availability", "in_stock", "condition", "pre_order", "sales_volume",
-    "delivery_info", "buybox_winner", "offer", "badges",
+    "delivery_info", "return_policy", "buybox_winner", "offer", "badges",
     "category", "category_path", "ranks",
     "about_product", "product_description", "product_overview",
     "product_photo", "product_url", "dimension", "weight",
@@ -337,7 +339,8 @@ def output_model_for(tool_name: str, example: Any) -> type[BaseModel] | None:
 # Deals rows were guessed at too: `savings_percentage` never existed upstream,
 # where the field is `discount_percentage`.
 COMPACT_LIST_FIELDS: tuple[str, ...] = (
-    "asin", "product_title", "product_brand",
+    # `position`: a search or storefront row's place on its page (2026-11-16)
+    "asin", "position", "product_title", "product_brand",
     "product_price", "product_original_price", "product_price_per_unit",
     # search rows say which currency their prices are in (2026-10-02)
     "currency",

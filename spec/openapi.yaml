@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.63
+  version: 1.1.64
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -118,10 +118,19 @@ paths:
         **Notes:** 404 means the ASIN is absent from that marketplace and IS billed. 503 is a temporary
         failure on our side and is NOT billed - retry. Bullet points and specs are what Amazon shows for
         the listing; on multi-variant listings they can describe the product family rather than the exact
-        variant. A null field means Amazon did not show it. Keys of `product_information`, `tech_specs`
-        and the other specification tables are trimmed: Amazon prints some rows twice, once with a trailing
-        space ("Package Dimensions "), and the copies are merged under the clean name; when they differ
-        the listing''s own value wins (the second copy of "ASIN" on a variant often names the parent).'
+        variant. A null field means Amazon did not show it. Beside the price the record carries what the
+        page shows there: `discount_percentage` (the saving against `product_original_price`, an integer),
+        `product_price_per_unit` ("$0.59/fluid ounce"), `deal_badge` ("Limited time deal"), `coupon` and
+        `promotion` in the page''s own words, and `subscribe_and_save` -- `{price, price_per_unit, max_savings_price,
+        max_savings_percentage}`, null when the listing has no such option. `return_policy` is the buy
+        box''s Returns line ("FREE refund/replacement until Jan 31, 2027"), and `buybox_winner.seller_url`
+        is the seller''s page. `product_photos` is this listing''s whole gallery at full size, in the
+        page''s order (it used to hold one image, or thumbnails); other variants'' images stay under `variation`.
+        A page that comes back with no product on it is fetched again and, failing that, answered as the
+        unbilled 503 -- never as an empty record. Keys of `product_information`, `tech_specs` and the
+        other specification tables are trimmed: Amazon prints some rows twice, once with a trailing space
+        ("Package Dimensions "), and the copies are merged under the clean name; when they differ the
+        listing''s own value wins (the second copy of "ASIN" on a variant often names the parent).'
       tags:
       - Amazon Data
       parameters:
@@ -177,8 +186,11 @@ paths:
                   asin: B09DJLW458
                   product_title: Example Product
                   product_price: $29.99
+                  discount_percentage: 17
+                  product_price_per_unit: $1.25/ounce
                   product_star_rating: '4.5'
                   product_num_ratings: 1284
+                  return_policy: FREE refund/replacement until Jan 31, 2027
                 request_id: 0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f
         '400': &id001
           description: 'Bad input (bad ASIN format, unknown geo, missing required param), or a page past
@@ -437,17 +449,18 @@ paths:
         are decimal strings; a null field means Amazon did not show it. `is_prime` is true when the result
         carries a Prime badge or its delivery line offers Prime delivery. `metadata.reachable_pages` says
         how far `page` can go: Amazon serves at most 7 pages of a query even when `metadata.total_pages`
-        counts more (then `pagination_note` says how to split the query). `_links.next` is the next page
-        while there is one; a page past the end is a free 400 `page_out_of_range`. A full page is up to
-        48 results and about 54 KB; the tool returns the first 10 as light rows by default and the answer
-        carries `_truncated`, `_omitted_fields`, `_projection` and `_notes`. filters_applied echoes the
-        effective sort_by (RELEVANCE when none was sent). A BEST_SELLERS ordering is Amazon''s query-scoped
-        popularity, not a category rank: a row''s `badges` / `is_best_seller` are what the result card
-        showed for this query, and an ASIN that is #1 in its subcategory can carry no badge here while
-        product_details reports best_seller=true with the rank. For a rank claim, use product_details
-        or best_sellers. An empty `products` list is served as success only when Amazon itself reports
-        0 results (metadata.total is 0 and `hint` says so). Anything else that is not a usable result
-        is an unbilled, retryable 503 with code upstream_unavailable.'
+        counts more (then `pagination_note` says how to split the query). `metadata.next_page` is the
+        page to ask for next (null on the last one) and `_links.next` its link; each row''s `position`
+        is its place on this page, from 1, sponsored rows counted as Amazon lists them; a page past the
+        end is a free 400 `page_out_of_range`. A full page is up to 48 results and about 54 KB; the tool
+        returns the first 10 as light rows by default and the answer carries `_truncated`, `_omitted_fields`,
+        `_projection` and `_notes`. filters_applied echoes the effective sort_by (RELEVANCE when none
+        was sent). A BEST_SELLERS ordering is Amazon''s query-scoped popularity, not a category rank:
+        a row''s `badges` / `is_best_seller` are what the result card showed for this query, and an ASIN
+        that is #1 in its subcategory can carry no badge here while product_details reports best_seller=true
+        with the rank. For a rank claim, use product_details or best_sellers. An empty `products` list
+        is served as success only when Amazon itself reports 0 results (metadata.total is 0 and `hint`
+        says so). Anything else that is not a usable result is an unbilled, retryable 503 with code upstream_unavailable.'
       tags:
       - Amazon Data
       parameters:
@@ -595,6 +608,8 @@ paths:
                   total: 1283
                   page_size: 48
                   total_pages: 27
+                  reachable_pages: 7
+                  next_page: 2
                 filters_applied:
                   min_price: 19.99
                   max_price: 30.0
@@ -620,6 +635,7 @@ paths:
                   - NEWEST
                 products:
                 - asin: B0888TJNH1
+                  position: 1
                   product_title: Womens Capri V Sporty Flip Flop
                   product_price: '24.95'
                   product_minimum_offer_price: '22.49'
@@ -781,18 +797,20 @@ paths:
         says exist) and a note; other sellers'' offers and stock are then not included. With check_inventory,
         a cart check that cannot read a quantity is retried once on another session; one that still fails
         says so on the offer, inventory_response {"error": "cart check failed", "code": "cart_check_failed",
-        "retryable": true}, is not billed, and never reads as a quantity of 0. Each offer carries `ships_from`
-        (the "Ships from" name: Amazon for FBA, else the seller), `delivery_message` (the offer''s own
-        delivery promise, e.g. "FREE delivery Friday, October 16 on orders shipped by Amazon over $35")
-        and `delivery_message_secondary` (the "Or fastest delivery ..." line), null when the offer shows
-        none. `delivery` is the same value as `ships_from`, kept for existing integrations; it never held
-        delivery information. A row for an ASIN that could not be answered carries `error`, `code`, `http_status`,
-        `billed`, `retryable` and `next_step`, like a top-level error: `upstream_unavailable` (not billed,
-        retry that ASIN), `no_offers` ("No offers found": the offer list holds no offer that can be bought
-        as is -- customizable listings have none; billed like a 404) or `asin_redirected` (Amazon answers
-        the ASIN with another listing''s offers; billed like a 404). On agent.apiguru.app the answer also
-        carries `success` and `_links` (self, and `details_url` per row); `billable_requests_count` is
-        there on your own key only.'
+        "retryable": true}, is not billed, and never reads as a quantity of 0. An offer whose price Amazon
+        shows only in the cart ("Add to cart to see product details") has `price` null and `price_hidden`
+        true; it used to read as price 0. Each offer carries `ships_from` (the "Ships from" name: Amazon
+        for FBA, else the seller), `delivery_message` (the offer''s own delivery promise, e.g. "FREE delivery
+        Friday, October 16 on orders shipped by Amazon over $35") and `delivery_message_secondary` (the
+        "Or fastest delivery ..." line), null when the offer shows none. `delivery` is the same value
+        as `ships_from`, kept for existing integrations; it never held delivery information. A row for
+        an ASIN that could not be answered carries `error`, `code`, `http_status`, `billed`, `retryable`
+        and `next_step`, like a top-level error: `upstream_unavailable` (not billed, retry that ASIN),
+        `no_offers` ("No offers found": the offer list holds no offer that can be bought as is -- customizable
+        listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another
+        listing''s offers; billed like a 404). On agent.apiguru.app the answer also carries `success`
+        and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own
+        key only.'
       tags:
       - Amazon Data
       parameters:
@@ -960,18 +978,20 @@ paths:
         says exist) and a note; other sellers'' offers and stock are then not included. With check_inventory,
         a cart check that cannot read a quantity is retried once on another session; one that still fails
         says so on the offer, inventory_response {"error": "cart check failed", "code": "cart_check_failed",
-        "retryable": true}, is not billed, and never reads as a quantity of 0. Each offer carries `ships_from`
-        (the "Ships from" name: Amazon for FBA, else the seller), `delivery_message` (the offer''s own
-        delivery promise, e.g. "FREE delivery Friday, October 16 on orders shipped by Amazon over $35")
-        and `delivery_message_secondary` (the "Or fastest delivery ..." line), null when the offer shows
-        none. `delivery` is the same value as `ships_from`, kept for existing integrations; it never held
-        delivery information. A row for an ASIN that could not be answered carries `error`, `code`, `http_status`,
-        `billed`, `retryable` and `next_step`, like a top-level error: `upstream_unavailable` (not billed,
-        retry that ASIN), `no_offers` ("No offers found": the offer list holds no offer that can be bought
-        as is -- customizable listings have none; billed like a 404) or `asin_redirected` (Amazon answers
-        the ASIN with another listing''s offers; billed like a 404). On agent.apiguru.app the answer also
-        carries `success` and `_links` (self, and `details_url` per row); `billable_requests_count` is
-        there on your own key only.'
+        "retryable": true}, is not billed, and never reads as a quantity of 0. An offer whose price Amazon
+        shows only in the cart ("Add to cart to see product details") has `price` null and `price_hidden`
+        true; it used to read as price 0. Each offer carries `ships_from` (the "Ships from" name: Amazon
+        for FBA, else the seller), `delivery_message` (the offer''s own delivery promise, e.g. "FREE delivery
+        Friday, October 16 on orders shipped by Amazon over $35") and `delivery_message_secondary` (the
+        "Or fastest delivery ..." line), null when the offer shows none. `delivery` is the same value
+        as `ships_from`, kept for existing integrations; it never held delivery information. A row for
+        an ASIN that could not be answered carries `error`, `code`, `http_status`, `billed`, `retryable`
+        and `next_step`, like a top-level error: `upstream_unavailable` (not billed, retry that ASIN),
+        `no_offers` ("No offers found": the offer list holds no offer that can be bought as is -- customizable
+        listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another
+        listing''s offers; billed like a 404). On agent.apiguru.app the answer also carries `success`
+        and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own
+        key only.'
       tags:
       - Amazon Data
       parameters:
@@ -1702,7 +1722,8 @@ paths:
         on that marketplace and for an id that is not a seller alike, so check it with seller_profile_batch
         (`_links.seller_profile`). Rows have the search row shape: `offers_count` is null unless the card
         shows a count, and `product_brand` is null on most storefront cards (Amazon prints no brand line
-        there; product_details has `brand_name`).'
+        there; product_details has `brand_name`). Rows carry `position` (their place on this page, from
+        1) and metadata carries `next_page`, as on search.'
       tags:
       - Amazon Data
       parameters:
