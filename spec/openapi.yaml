@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.67
+  version: 1.1.68
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -303,9 +303,10 @@ paths:
         serves full and star-filtered review lists only to signed-in accounts) or for seller feedback
         (seller_reviews). Returns the overall rating, rating count, review_histogram (percent of all ratings
         per star), Amazon''s ''customers say'' AI summary where that marketplace shows one, and the reviews
-        on the product page (typically up to 8 from this marketplace and 5 from other countries), each
-        with rating, review_date, review_country, from_this_marketplace, verified flag and helpful_votes;
-        from_rating/to_rating keep a star window.
+        on the product page (typically up to 8 from this marketplace and 5 from other countries; none
+        on amazon.com at present, where Amazon shows review text only to signed-in visitors), each with
+        rating, review_date, review_country, from_this_marketplace, verified flag and helpful_votes; from_rating/to_rating
+        keep a star window.
 
 
         **Price:** $0.003 per call
@@ -315,7 +316,9 @@ paths:
         reviews are those on the product page; review_coverage says how many and from where. from_rating/to_rating
         filter them. review_histogram (here and on product_details) gives the share of every rating. customers_say
         is null where Amazon shows no summary (several marketplaces never do); customers_say_note then
-        says so.'
+        says so. Where Amazon shows review text on the product page only to signed-in visitors (amazon.com
+        at present), `product_reviews` is empty and `review_coverage.note` says so; the rating, rating
+        count, review_histogram and customers_say are returned as usual.'
       tags:
       - Amazon Data
       parameters:
@@ -694,13 +697,14 @@ paths:
         (billed, like a not-found product_details call; retrying will not help). The batch record comes
         from Amazon''s app, not the product page: price, rating, availability, images, bullets and variants,
         but no best-seller ranks, no best-seller badge, no category path and no merchant (seller) id (`is_best_seller`
-        is always false here and is left out of the compact row). For those call product_details per ASIN.
-        On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless
-        (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit, value} and dimension
-        {length, width, height, unit, raw} in product_details'' shape, read from the row''s product_attributes
-        (package dimensions first); outside amazon.com Amazon''s app prints centimetres under an inches
-        label, so there dimension.unit is cm while raw keeps Amazon''s text. Prices are decimal strings
-        as each source prints them ("179.0" here, "179.00" on product_details): compare them as numbers.'
+        is null here, because the source does not say, and is left out of the compact row). For those
+        call product_details per ASIN. On an API key both cost one request per ASIN, so the batch saves
+        calls and time, not money; keyless (x402) it is also cheaper per item. Compact rows carry brand,
+        weight {raw, unit, value} and dimension {length, width, height, unit, raw} in product_details''
+        shape, read from the row''s product_attributes (package dimensions first); outside amazon.com
+        Amazon''s app prints centimetres under an inches label, so there dimension.unit is cm while raw
+        keeps Amazon''s text. Prices are decimal strings as each source prints them ("179.0" here, "179.00"
+        on product_details): compare them as numbers.'
       tags:
       - Amazon Data
       parameters:

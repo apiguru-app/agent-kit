@@ -2,7 +2,7 @@
   "$comment": "CANONICAL SOURCE OF TRUTH for the Apiguru Agent Kit. openapi.yaml and llms.txt are GENERATED from this file by generate.py - do not hand-edit those. Every field here was derived by reading the live blueprint code under docker-setup/backend/app/blueprints/; the `source` key on each endpoint names the file so drift can be re-checked.",
   "api": {
     "name": "Apiguru Amazon Data API",
-    "version": "1.1.67",
+    "version": "1.1.68",
     "base_url": "https://dash.apiguru.app/api/v1",
     "agent_base_url": "https://agent.apiguru.app/agent/v1",
     "mcp_url": "https://mcp.apiguru.app/mcp",
@@ -197,7 +197,7 @@
       "path": "/v2/product-reviews",
       "method": "GET",
       "summary": "Customer reviews for a single ASIN",
-      "description": "Use for what customers say about one product. Not for its full review history (Amazon serves full and star-filtered review lists only to signed-in accounts) or for seller feedback (seller_reviews). Returns the overall rating, rating count, review_histogram (percent of all ratings per star), Amazon's 'customers say' AI summary where that marketplace shows one, and the reviews on the product page (typically up to 8 from this marketplace and 5 from other countries), each with rating, review_date, review_country, from_this_marketplace, verified flag and helpful_votes; from_rating/to_rating keep a star window.",
+      "description": "Use for what customers say about one product. Not for its full review history (Amazon serves full and star-filtered review lists only to signed-in accounts) or for seller feedback (seller_reviews). Returns the overall rating, rating count, review_histogram (percent of all ratings per star), Amazon's 'customers say' AI summary where that marketplace shows one, and the reviews on the product page (typically up to 8 from this marketplace and 5 from other countries; none on amazon.com at present, where Amazon shows review text only to signed-in visitors), each with rating, review_date, review_country, from_this_marketplace, verified flag and helpful_votes; from_rating/to_rating keep a star window.",
       "bazaar_description": "Amazon customer reviews for any ASIN: overall star rating, total rating count, the 'customers say' AI summary, and individual review text with per-review ratings. Useful for sentiment analysis, product research and competitive monitoring across 23 marketplaces.",
       "price_model": "flat",
       "price_usd": "0.003",
@@ -299,7 +299,7 @@
         },
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Same 404-billed / 503-not-billed semantics as product_details. No paging or sort: the reviews are those on the product page; review_coverage says how many and from where. from_rating/to_rating filter them. review_histogram (here and on product_details) gives the share of every rating. customers_say is null where Amazon shows no summary (several marketplaces never do); customers_say_note then says so.",
+      "notes": "Same 404-billed / 503-not-billed semantics as product_details. No paging or sort: the reviews are those on the product page; review_coverage says how many and from where. from_rating/to_rating filter them. review_histogram (here and on product_details) gives the share of every rating. customers_say is null where Amazon shows no summary (several marketplaces never do); customers_say_note then says so. Where Amazon shows review text on the product page only to signed-in visitors (amazon.com at present), `product_reviews` is empty and `review_coverage.note` says so; the rating, rating count, review_histogram and customers_say are returned as usual.",
       "mcp_params": {
         "max_reviews": {
           "type": "integer",
@@ -579,7 +579,7 @@
         "country_code": "US",
         "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
       },
-      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help). The batch record comes from Amazon's app, not the product page: price, rating, availability, images, bullets and variants, but no best-seller ranks, no best-seller badge, no category path and no merchant (seller) id (`is_best_seller` is always false here and is left out of the compact row). For those call product_details per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit, value} and dimension {length, width, height, unit, raw} in product_details' shape, read from the row's product_attributes (package dimensions first); outside amazon.com Amazon's app prints centimetres under an inches label, so there dimension.unit is cm while raw keeps Amazon's text. Prices are decimal strings as each source prints them (\"179.0\" here, \"179.00\" on product_details): compare them as numbers.",
+      "notes": "Billed per ASIN processed, including ones that come back not-found. More than 20 ASINs returns 413. Bullet points and specs are what Amazon shows for the listing; on multi-variant listings they can describe the product family rather than the exact variant. A null field means Amazon did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned (billed, like a not-found product_details call; retrying will not help). The batch record comes from Amazon's app, not the product page: price, rating, availability, images, bullets and variants, but no best-seller ranks, no best-seller badge, no category path and no merchant (seller) id (`is_best_seller` is null here, because the source does not say, and is left out of the compact row). For those call product_details per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit, value} and dimension {length, width, height, unit, raw} in product_details' shape, read from the row's product_attributes (package dimensions first); outside amazon.com Amazon's app prints centimetres under an inches label, so there dimension.unit is cm while raw keeps Amazon's text. Prices are decimal strings as each source prints them (\"179.0\" here, \"179.00\" on product_details): compare them as numbers.",
       "mcp_params": {
         "compact": {
           "type": "boolean",
