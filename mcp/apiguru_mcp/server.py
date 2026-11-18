@@ -104,86 +104,56 @@ Choosing a tool:
 - Discounted items                 -> deals
 - Seller storefront / reputation   -> seller_products, seller_reviews,
                                       seller_profile_batch
+- Prices, marketplaces, access mode -> list_capabilities (free, makes no
+                                      network request)
 
 Rules that will save you money and failed calls:
 - Pass an ASIN (10 characters) or an Amazon product URL; lower case is
   fine. A URL's domain sets the marketplace unless `geo` says otherwise;
   what was rewritten is listed under `_input_interpreted`.
-- Prefer the batch tools over looping single-item tools: fewer calls,
-  and cheaper per item without an account. For best-seller ranks,
-  category path or merchant id use product_details per ASIN; the batch
-  record does not carry them.
-- product_details and product_details_batch return a COMPACT record by
-  default and list what they left out under `_omitted_fields`. Both carry
-  weight and dimension, and the brand (`brand_name` on product_details).
-  Ask for more with fields= (product_details: "tech_specs,product_information";
-  batch: "product_attributes") or compact=false. The full record is ~75 KB;
-  do not request it unless you need it.
-- Variants come as `variation_summary`: the attributes that vary, their
-  values, the sibling count and this ASIN's own values. The ASIN-keyed maps
-  (`variation`, `product_variations`) can be 50-130 KB on big families;
-  ask for one by name only when you must resolve a value to a sibling ASIN.
 - Every error is a JSON document with http_status, billed, retryable and
   next_step. Retry only when retryable is true. A 404 IS billed; a 503 is
   not.
+- Prefer the batch tools over looping single-item tools: fewer calls,
+  and cheaper per item without an account.
 - When the free calls run out, a tool returns an x402 PaymentRequired
   result (`x402Version`, `accepts`). An x402-capable MCP client pays it and
-  resends the same call with the payment in `_meta["x402/payment"]`; the
-  receipt comes back in `_meta["x402/payment-response"]`. Without a wallet,
-  ask the user to connect https://mcp.apiguru.app/account and sign in, then
-  repeat the same call.
+  resends the same call with the payment in `_meta["x402/payment"]`.
+  Without a wallet, ask the user to connect
+  https://mcp.apiguru.app/account and sign in, then repeat the same call.
 - Identical calls within a few minutes are answered from a short cache
   (`_cache` marks such answers) and cost nothing extra.
-- Call list_capabilities first if you need prices, the marketplace list or
-  your access mode; it is free and makes no network request.
-- Bullet points and specs describe what Amazon shows for the listing; on
-  multi-variant listings they can describe the product family rather than
-  the exact variant. A null field means Amazon did not show that field.
-- `search` takes eleven filters besides the query -- page, sort_by, brand,
-  seller_id, category_id, min_price, max_price, product_condition (NEW /
-  USED / RENEWED), today_deals, deal_type (coupons, all_discounts, ...),
-  geo. `seller_products` takes the same set. Every answer says which took
-  effect under `filters_applied`, which the marketplace could not apply
-  under `filters_ignored` (with the reason), and what it offers under
-  `available_filters`. `list_capabilities` lists them per tool.
-- `best_sellers` departments differ per marketplace (amazon.de's
-  electronics slug is `ce-de`). Pass a slug or a name; the answer carries
-  `available_categories` for that geo and `available_subcategories` with
-  the ids `subcategory_code` takes. Pages run 1-5, 50 rows each.
-- `deals` filters by department (`categories`: a name such as Electronics,
-  or an id), brand id (`brands`), min_price / max_price / min_discount and
-  the Prime programs. Every deals answer carries `available_filters` with
-  the ids this marketplace accepts, `filters_applied` with what took
-  effect, and `next_offset` for the next page. For a brand by NAME use
-  search with brand=<name> and today_deals=true.
 
-Reading a page of results without drowning in it:
+Keeping answers small:
+- product_details and product_details_batch return a COMPACT record by
+  default and list what they left out under `_omitted_fields`. Ask for
+  more with fields= or compact=false; the full record is ~75 KB.
+- Variants come as `variation_summary`. The ASIN-keyed maps (`variation`,
+  `product_variations`) can be 50-130 KB on big families; ask for one by
+  name only when you must resolve a value to a sibling ASIN.
 - search, best_sellers, deals, seller_products and seller_reviews return
-  the first 10 rows as LIGHT records by default. A full page is up to 48
-  rows and ~54 KB, which most clients spill to a file. Raise `limit` (0 =
-  the whole page), set `compact=false` for every field, or name what you
-  want with `fields="asin,product_title,product_price"`. Answers carry
-  `_truncated` and `_omitted_fields` so nothing is hidden.
-- Filtering beats paging: brand, price range and sort_by cut the page down
-  before it is fetched, so the answer is small AND relevant.
+  the first 10 rows as LIGHT records by default. Raise `limit` (0 = the
+  whole page), set `compact=false`, or name what you want with
+  `fields="asin,product_title,product_price"`. `_truncated` gives the real
+  row count.
+- Filtering beats paging. Each tool's description lists its filters, and
+  every list answer says which took effect (`filters_applied`), which the
+  marketplace could not apply (`filters_ignored`) and what it offers
+  (`available_filters`).
 
-Two things about Amazon's own data that will mislead you if you assume
-otherwise:
-- **Rating counts are per listing family, not per ASIN.** Variants share a
-  review pool, so the same 488,443 appears on every colour of one shoe.
-  Never read it as "this variant has that many reviews".
-- **A variant's title can be the parent's.** A search row's ASIN and title
-  can disagree (the URL slug often shows the real variant). When the exact
-  variant matters, call product_details on that ASIN -- it is authoritative
-  for the ASIN you passed.
+Amazon's own data will mislead you if you assume otherwise:
+- Rating counts are per listing family, not per ASIN: variants share one
+  review pool. Never read a count as "this variant has that many reviews".
+- A search row's title can be the parent's. When the exact variant
+  matters, call product_details on that ASIN.
 - `badges` is the source of truth for Amazon's Choice / Best Seller /
-  Overall Pick. `is_amazon_choice` and `is_best_seller` are conveniences
-  derived from it.
+  Overall Pick.
+- Bullet points and specs can describe the product family rather than the
+  exact variant. A null field means Amazon did not show that field.
 
-Found something wrong? Say so -- this API has been fixed more than once
-because a caller reported a bad field. Open an issue at
-https://github.com/apiguru-app/agent-kit/issues if you have a GitHub
-account; otherwise call the free `send_feedback` tool. Neither is billed.
+Found something wrong? Open an issue at
+https://github.com/apiguru-app/agent-kit/issues, or call the free
+`send_feedback` tool. Neither is billed.
 """
 
 # Called after every tool invocation when the hosted server has somewhere to
@@ -384,9 +354,9 @@ def _add_capabilities_tool(server: MCPServer) -> None:
 
     async def list_capabilities() -> str:
         """List every Apiguru endpoint with its price, required parameters and
-        supported marketplaces, plus your current access mode, cache and
-        session budget. Free: answers locally with no network request and no
-        charge. Call this before paid tools if you need to plan."""
+        supported marketplaces, plus your current access mode and cache.
+        Free: answers locally with no network request and no charge. Call
+        this before paid tools if you need to plan."""
         catalogue = [
             {
                 "tool": ep["name"],
@@ -424,6 +394,33 @@ def _add_capabilities_tool(server: MCPServer) -> None:
                 "Arbitrum or Avalanche)"
             )
         budget = client_module.session_budget_usd()
+        # The HTTP middleware sets the route on every hosted request; over
+        # stdio it stays unset.
+        hosted = client_module.request_route.get() is not None
+        if hosted:
+            # A hosted caller was told to "use the hosted server, which is
+            # always current" while already on it.
+            version_note = (
+                "You are on the hosted server (mcp.apiguru.app), which always runs the latest "
+                f"release: apiguru-mcp {info['version']}. There is nothing to upgrade."
+            )
+            # One process serves every caller here, so the spend counter is
+            # everyone's total since the last restart: a signed-in caller saw
+            # 0.1560 before making a single call. It is not their number and
+            # not theirs to see. A session budget is a local-install setting.
+            session: dict[str, Any] = {}
+        else:
+            version_note = (
+                f"This catalogue ships inside apiguru-mcp {info['version']} and is answered "
+                "offline, so it is exactly as current as this install. If it is behind the "
+                "latest release (https://github.com/apiguru-app/agent-kit/releases), upgrade "
+                "with uvx apiguru-mcp==<version> or npx apiguru-mcp@<version>, or use the "
+                "hosted server https://mcp.apiguru.app/mcp, which is always current."
+            )
+            session = {
+                "session_budget_usd": str(budget) if budget is not None else None,
+                "session_spent_usd": str(client_module.session_spent_usd),
+            }
         return json.dumps(
             {
                 "api": info["name"],
@@ -432,13 +429,7 @@ def _add_capabilities_tool(server: MCPServer) -> None:
                 # no filters. The catalogue is bundled with the package, so it
                 # is only as new as the package: say which one is answering and
                 # how to move off it.
-                "version_note": (
-                    f"This catalogue ships inside apiguru-mcp {info['version']} and is answered "
-                    "offline, so it is exactly as current as this install. If it is behind the "
-                    "latest release (https://github.com/apiguru-app/agent-kit/releases), upgrade "
-                    "with uvx apiguru-mcp==<version> or npx apiguru-mcp@<version>, or use the "
-                    "hosted server https://mcp.apiguru.app/mcp, which is always current."
-                ),
+                "version_note": version_note,
                 "authenticated": bool(key),
                 "access_mode": access_mode,
                 "marketplaces": list(load_spec()["geos"].keys()),
@@ -465,8 +456,7 @@ def _add_capabilities_tool(server: MCPServer) -> None:
                 "list_default_limit": DEFAULT_LIST_LIMIT,
                 "large_optional_fields": list(KNOWN_LARGE_FIELDS),
                 "cache_ttl_seconds": int(client_module.cache_ttl_seconds()),
-                "session_budget_usd": str(budget) if budget is not None else None,
-                "session_spent_usd": str(client_module.session_spent_usd),
+                **session,
                 "sign_in_url": client_module.OAUTH_URL,
                 # An agent on a stale plugin could not find anywhere to report
                 # a bug: the plugin manifest only carries a repo URL and an
