@@ -21,9 +21,9 @@ No headers, no signup. Put the required value in the path (several agent fetcher
 - https://agent.apiguru.app/agent/v1/stock/B09DJLW458,B0014C0LUC/US
 - https://agent.apiguru.app/agent/v1/v2/best-sellers?geo=US
 - https://agent.apiguru.app/agent/v1/v2/deals?geo=US
-- https://agent.apiguru.app/agent/v1/seller-profile/A2A1RNLLUK3HYA/US
-- https://agent.apiguru.app/agent/v1/v2/seller-products/A2A1RNLLUK3HYA/US
-- https://agent.apiguru.app/agent/v1/v2/seller-reviews/A2A1RNLLUK3HYA/US
+- https://agent.apiguru.app/agent/v1/seller-profile/A294P4X9EWVXLJ/US
+- https://agent.apiguru.app/agent/v1/v2/seller-products/A294P4X9EWVXLJ/US
+- https://agent.apiguru.app/agent/v1/v2/seller-reviews/A294P4X9EWVXLJ/US
 
 ## What each call answers
 

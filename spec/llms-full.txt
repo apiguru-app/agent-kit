@@ -32,9 +32,9 @@ Copy one, change the value at the end, fetch it. Every one of these is a complet
 - https://agent.apiguru.app/agent/v1/stock/B09DJLW458,B0014C0LUC/US
 - https://agent.apiguru.app/agent/v1/v2/best-sellers?geo=US
 - https://agent.apiguru.app/agent/v1/v2/deals?geo=US
-- https://agent.apiguru.app/agent/v1/seller-profile/A2A1RNLLUK3HYA/US
-- https://agent.apiguru.app/agent/v1/v2/seller-products/A2A1RNLLUK3HYA/US
-- https://agent.apiguru.app/agent/v1/v2/seller-reviews/A2A1RNLLUK3HYA/US
+- https://agent.apiguru.app/agent/v1/seller-profile/A294P4X9EWVXLJ/US
+- https://agent.apiguru.app/agent/v1/v2/seller-products/A294P4X9EWVXLJ/US
+- https://agent.apiguru.app/agent/v1/v2/seller-reviews/A294P4X9EWVXLJ/US
 
 ## When free calls run out
 
@@ -222,7 +222,7 @@ A seller with seven pages costs seven requests a run, so ten sellers once a day 
 
 ## Reading list results without drowning in them
 
-A full page from `/search` is up to 48 results and about 54 KB of JSON. Over MCP the list tools (`search`, `best_sellers`, `deals`, `seller_products`, `seller_reviews`) answer with the first **10 rows as light records** by default, which is around 7 KB and fits inline. Three ways to change that:
+A full page from `/search` is usually 48 results (Amazon serves 16 to 60, depending on its layout) and about 54 KB of JSON. Over MCP the list tools (`search`, `best_sellers`, `deals`, `seller_products`, `seller_reviews`) answer with the first **10 rows as light records** by default, which is around 7 KB and fits inline. Three ways to change that:
 
 - `limit=N` - how many rows (`limit=0` for the whole page).
 - `compact=false` - every field the REST API sends, including the full delivery text.
@@ -270,7 +270,7 @@ Measured on the ASIN above: 2,223 bytes against 135,923 for the whole record, a 
 
 - **Marketplaces** (23): US, CA, DE, MX, UK, FR, IT, ES, AU, BR, IN, JP, NL, AE, PL, SA, SG, SE, TR, BE, IE, ZA, EG. Pass as `geo`, chosen from the user's request or the Amazon domain they mention (amazon.de -> DE). The API assumes `US` only when the parameter is omitted; do not rely on that.
 - **ASIN format**: `^[A-Z0-9]{10}$`. On agent.apiguru.app and the MCP server any case is accepted and upper-cased, and an Amazon product URL (/dp/ASIN, /gp/product/ASIN, ?asin=) works in place of an ASIN; its domain sets geo unless geo names another marketplace (then 400). The answer lists what was rewritten under parameters_interpreted (MCP: _input_interpreted).
-- **Seller ID format**: `^[Aa][A-Za-z0-9]{9,20}$`. An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected with 400 before any fetch.
+- **Seller ID format**: `^[Aa][A-Za-z0-9]{9,20}$`. An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in all) -- the seller= or me= value of a storefront URL, e.g. A294P4X9EWVXLJ. Anything else is rejected with 400 before any fetch.
 - **Sample ASIN for testing**: `B09DJLW458`.
 
 ## Error semantics

@@ -48,7 +48,10 @@ COMPACT_PRODUCT_FIELDS: tuple[str, ...] = (
 # them out of the row's specification attributes (see below).
 COMPACT_BATCH_FIELDS: tuple[str, ...] = (
     "asin", "title", "brand", "price", "prime_price", "basis_price", "basis_price_label",
-    "savings_percentage", "currency", "condition", "availability", "is_best_seller",
+    # `is_best_seller` is not here: the batch source carries no badge, so the
+    # field is false for every product, a #1 best seller included (0 true in
+    # 401 rows, 2026-11-18). product_details reads the badge off the page.
+    "savings_percentage", "currency", "condition", "availability",
     "product_reviews", "deal_type", "delivery", "product_info", "description",
     "weight", "dimension",
     "url", "details_url", "variation_summary", "error", "status",
@@ -365,9 +368,11 @@ COMPACT_LIST_FIELDS: tuple[str, ...] = (
     # row is enough to narrow the next call.
     "discount_percentage", "discount_absolute", "deal_badge", "deal_ends_at",
     "deal_availability", "currency", "brand_id", "department_ids",
-    # seller reviews.
-    "review_id", "review_title", "review_comment", "review_star_rating",
-    "review_date", "review_author",
+    # seller reviews, as the upstream names them. The names here were guessed
+    # (review_comment, review_star_rating, review_author ...), so a light row
+    # came out as a date and nothing else (2026-11-18).
+    "rater", "rating", "review_text", "review_date",
+    "was_suppressed", "suppress_reason", "has_response", "response_text", "response_date",
 )
 
 # The keys a list row is expected to have; used to name what was dropped.

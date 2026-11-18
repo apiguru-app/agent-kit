@@ -787,7 +787,8 @@ def build_llms_full_txt(spec):
         "",
         "## Reading list results without drowning in them",
         "",
-        "A full page from `/search` is up to 48 results and about 54 KB of "
+        "A full page from `/search` is usually 48 results (Amazon serves 16 to 60, "
+        "depending on its layout) and about 54 KB of "
         "JSON. Over MCP the list tools (`search`, `best_sellers`, `deals`, "
         "`seller_products`, `seller_reviews`) answer with the first **10 rows "
         "as light records** by default, which is around 7 KB and fits inline. "

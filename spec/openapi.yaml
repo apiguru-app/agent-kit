@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Apiguru Amazon Data API
-  version: 1.1.66
+  version: 1.1.67
   summary: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
     deals, seller profiles, and live offers/stock across 23 country marketplaces.'
   description: 'Real-time structured Amazon marketplace data: product details, reviews, search, best-sellers,
@@ -134,7 +134,12 @@ paths:
         empty record. Keys of `product_information`, `tech_specs` and the other specification tables are
         trimmed: Amazon prints some rows twice, once with a trailing space ("Package Dimensions "), and
         the copies are merged under the clean name; when they differ the listing''s own value wins (the
-        second copy of "ASIN" on a variant often names the parent).'
+        second copy of "ASIN" on a variant often names the parent). `currency` is the symbol Amazon prints
+        on the page ($, €, £, R$, AED); the ISO code is `price_snapshot.currency`. `is_best_seller` and
+        `badges.best_seller` are true only for the listing''s own "#1 Best Seller" badge. `ranks` and
+        `category_path` are empty when Amazon''s page for the listing shows no Best Sellers Rank rows
+        or breadcrumb; a listing with the badge then gets one `ranks` entry read from the badge (rank
+        1 in the category the badge names), marked `source: best_seller_badge`.'
       tags:
       - Amazon Data
       parameters:
@@ -578,7 +583,7 @@ paths:
         in: query
         required: false
         description: 'Restrict results to one seller''s offers: an Amazon seller id, ''A'' followed by
-          9-20 letters and digits (e.g. A2A1RNLLUK3HYA).'
+          9-20 letters and digits (e.g. A294P4X9EWVXLJ).'
         schema:
           type: string
           pattern: ^[Aa][A-Za-z0-9]{9,20}$
@@ -688,12 +693,14 @@ paths:
         did not show it. ASINs Amazon has no record for on that marketplace are listed in not_returned
         (billed, like a not-found product_details call; retrying will not help). The batch record comes
         from Amazon''s app, not the product page: price, rating, availability, images, bullets and variants,
-        but no best-seller ranks, no category path and no merchant (seller) id. For those call product_details
-        per ASIN. On an API key both cost one request per ASIN, so the batch saves calls and time, not
-        money; keyless (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit,
-        value} and dimension {length, width, height, unit, raw} in product_details'' shape, read from
-        the row''s product_attributes (package dimensions first); outside amazon.com Amazon''s app prints
-        centimetres under an inches label, so there dimension.unit is cm while raw keeps Amazon''s text.'
+        but no best-seller ranks, no best-seller badge, no category path and no merchant (seller) id (`is_best_seller`
+        is always false here and is left out of the compact row). For those call product_details per ASIN.
+        On an API key both cost one request per ASIN, so the batch saves calls and time, not money; keyless
+        (x402) it is also cheaper per item. Compact rows carry brand, weight {raw, unit, value} and dimension
+        {length, width, height, unit, raw} in product_details'' shape, read from the row''s product_attributes
+        (package dimensions first); outside amazon.com Amazon''s app prints centimetres under an inches
+        label, so there dimension.unit is cm while raw keeps Amazon''s text. Prices are decimal strings
+        as each source prints them ("179.0" here, "179.00" on product_details): compare them as numbers.'
       tags:
       - Amazon Data
       parameters:
@@ -818,7 +825,12 @@ paths:
         listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another
         listing''s offers; billed like a 404). On agent.apiguru.app the answer also carries `success`
         and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own
-        key only.'
+        key only. Each offer carries `merchant_id` and `sold_by_amazon`. Amazon lists its own offers (Amazon.com,
+        Amazon Resale and their local names) without a seller link, so on those rows `seller_id` repeats
+        the seller''s name; `merchant_id` is the id to use: the linked seller''s id, or for Amazon''s
+        own offers the merchant id the product page states (null when it states none). `sold_by_amazon`
+        is true for Amazon''s own offers, false for a linked seller and null when the row does not say.
+        Amazon itself has no seller profile to look up.'
       tags:
       - Amazon Data
       parameters:
@@ -999,7 +1011,12 @@ paths:
         listings have none; billed like a 404) or `asin_redirected` (Amazon answers the ASIN with another
         listing''s offers; billed like a 404). On agent.apiguru.app the answer also carries `success`
         and `_links` (self, and `details_url` per row); `billable_requests_count` is there on your own
-        key only.'
+        key only. Each offer carries `merchant_id` and `sold_by_amazon`. Amazon lists its own offers (Amazon.com,
+        Amazon Resale and their local names) without a seller link, so on those rows `seller_id` repeats
+        the seller''s name; `merchant_id` is the id to use: the linked seller''s id, or for Amazon''s
+        own offers the merchant id the product page states (null when it states none). `sold_by_amazon`
+        is true for Amazon''s own offers, false for a linked seller and null when the row does not say.
+        Amazon itself has no seller profile to look up.'
       tags:
       - Amazon Data
       parameters:
@@ -1393,7 +1410,9 @@ paths:
         and total_count does not reflect them. An empty answer carries a hint saying why. Deal prices
         expire: check deal_ends_at. The older price_range and discount_range parameters are still accepted,
         as buckets (1-5 = under 25 / 25-50 / 50-100 / 100-200 / 200 and up; 1-4 = 10 / 25 / 50 / 70 percent
-        off or more) or as bands such as 25-50 and 70+.'
+        off or more) or as bands such as 25-50 and 70+. `discount_percentage` is Amazon''s display string
+        ("18%") and `discount_absolute` a decimal string; on product_details `discount_percentage` is
+        a number.'
       tags:
       - Amazon Data
       parameters:
@@ -1606,7 +1625,8 @@ paths:
         counts ok + not_found rows; on the pay-per-call rail the per-item quote is settled up front, so
         retry `unavailable` ids in a separate call rather than expecting a partial refund. On agent.apiguru.app
         the answer also carries `success` and `_links.self`; `billable_requests_count` is there on your
-        own key only.'
+        own key only. Amazon itself has no seller profile: the merchant id of an offer sold by Amazon
+        (offers_stock marks those `sold_by_amazon`) answers `not_found`, billed like any other.'
       tags:
       - Amazon Data
       parameters:
@@ -1614,7 +1634,7 @@ paths:
         in: query
         required: true
         description: Comma-separated seller IDs, maximum 10. Each must be an Amazon seller id -- 'A' followed
-          by 9-20 letters and digits, e.g. A2A1RNLLUK3HYA -- or the whole call 400s.
+          by 9-20 letters and digits, e.g. A294P4X9EWVXLJ -- or the whole call 400s.
         schema:
           type: string
           pattern: ^[Aa][A-Za-z0-9]{9,20}(,[Aa][A-Za-z0-9]{9,20})*$
@@ -1658,7 +1678,7 @@ paths:
                 type: object
               example:
                 results:
-                - seller_id: A2A1RNLLUK3HYA
+                - seller_id: A294P4X9EWVXLJ
                   status: ok
                   seller_name: Example Seller
                   business_name: Example Seller LLC
@@ -1739,7 +1759,7 @@ paths:
         in: query
         required: true
         description: 'Amazon seller id whose storefront to list: ''A'' followed by 9-20 letters and digits,
-          the seller= or me= value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required.'
+          the seller= or me= value of a storefront URL (e.g. A294P4X9EWVXLJ). Required.'
         schema:
           type: string
           pattern: ^[Aa][A-Za-z0-9]{9,20}$
@@ -1902,7 +1922,10 @@ paths:
 
         **Notes:** from_rating and to_rating are optional; omit both for unfiltered feedback. A page holds
         5 reviews and the answer carries current_page and has_next_page; Amazon exposes no total, so page
-        until has_next_page is false (up to page 100).'
+        until has_next_page is false (up to page 100). Each review has `rater`, `rating`, `review_text`,
+        `review_date` and, where the seller answered, `response_text`. `has_feedback` is Amazon''s own
+        flag for whether the seller has any feedback entry: a seller can have rating counts in the profile
+        and none, and page 1 then carries a `note` saying so.'
       tags:
       - Amazon Data
       parameters:
@@ -1910,7 +1933,7 @@ paths:
         in: query
         required: true
         description: 'Amazon seller id: ''A'' followed by 9-20 letters and digits, the seller= or me=
-          value of a storefront URL (e.g. A2A1RNLLUK3HYA). Required.'
+          value of a storefront URL (e.g. A294P4X9EWVXLJ). Required.'
         schema:
           type: string
           pattern: ^[Aa][A-Za-z0-9]{9,20}$
@@ -2029,7 +2052,7 @@ x-apiguru-conventions:
     (MCP: _input_interpreted).'
   seller_id_pattern: ^[Aa][A-Za-z0-9]{9,20}$
   seller_id_note: An Amazon seller id is 'A' followed by 9-20 letters and digits (10-21 characters in
-    all) -- the seller= or me= value of a storefront URL, e.g. A2A1RNLLUK3HYA. Anything else is rejected
+    all) -- the seller= or me= value of a storefront URL, e.g. A294P4X9EWVXLJ. Anything else is rejected
     with 400 before any fetch.
   geo_default: US
   sample_asin: B09DJLW458
@@ -2066,4 +2089,4 @@ x-apiguru-conventions:
     tell the user and retry only if they agree. Allow 60s before treating a slow call as lost. Never retry
     400, 401, 402, 403, 404 or 413: the request itself is the problem and repeating it will not change
     the answer.'
-  sample_seller_id: A2A1RNLLUK3HYA
+  sample_seller_id: A294P4X9EWVXLJ
